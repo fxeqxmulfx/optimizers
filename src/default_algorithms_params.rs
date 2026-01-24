@@ -9,7 +9,7 @@ pub static DEFAULT_ANSR: ANSR = ANSR {
     popsize: 8,
     restart_tolerance: 0.01,
     sigma: 0.05,
-    self_instead_neighbour: 0.8,
+    self_instead_neighbour: 0.9,
 };
 
 pub const ALGORITHMS: [AlgorithmDescriptor; 1] = [AlgorithmDescriptor {
