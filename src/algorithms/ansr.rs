@@ -49,7 +49,7 @@ impl Optimizer for ANSR {
         let tol = self.tol;
         let sigma = self.sigma;
         let normal = Normal::new(0.0, sigma).unwrap();
-        let mut current_errors: Vec<f32> = vec![0.0; popsize];
+        let mut current_errors: Vec<f32> = vec![f32::INFINITY; popsize];
         let mut ind = 0;
         let mut history = OptimizationHistory {
             x: Vec::new(),
