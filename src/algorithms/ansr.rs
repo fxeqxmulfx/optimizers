@@ -101,9 +101,16 @@ impl Optimizer for ANSR {
                                 / f32::max(best_errors[p].abs(), best_errors[r].abs()),
                         ) < tol
                     {
-                        best_errors[r] = f32::INFINITY;
-                        for d in 0..params {
-                            best_positions[r][d] = random_distr.sample(&mut rng);
+                        if r != ind {
+                            best_errors[r] = f32::INFINITY;
+                            for d in 0..params {
+                                best_positions[r][d] = random_distr.sample(&mut rng);
+                            }
+                        } else {
+                            best_errors[p] = f32::INFINITY;
+                            for d in 0..params {
+                                best_positions[p][d] = random_distr.sample(&mut rng);
+                            }
                         }
                     }
                 }
