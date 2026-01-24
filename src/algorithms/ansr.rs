@@ -95,22 +95,22 @@ impl Optimizer for ANSR {
                 for r in (p + 1)..popsize {
                     if best_errors[p] != f32::INFINITY
                         && best_errors[r] != f32::INFINITY
-                        && f32::max(best_errors[p], best_errors[r]) != 0.0
+                        && f32::max(best_errors[p].abs(), best_errors[r].abs()) != 0.0
                         && f32::abs(
                             (best_errors[p] - best_errors[r])
                                 / f32::max(best_errors[p].abs(), best_errors[r].abs()),
                         ) < tol
                     {
+                        best_errors[r] = f32::INFINITY;
                         for d in 0..params {
                             best_positions[r][d] = random_distr.sample(&mut rng);
-                            best_errors[r] = f32::INFINITY
                         }
                     }
                 }
             }
             for p in 0..popsize {
                 for d in 0..params {
-                    if self_instead_neighbour <= random_distr.sample(&mut rng) {
+                    if random_distr.sample(&mut rng) <= self_instead_neighbour {
                         current_positions[p][d] = f32::min(
                             f32::max(
                                 best_positions[p][d]
@@ -139,9 +139,9 @@ impl Optimizer for ANSR {
             }
         }
         let result = OptimizerResult {
-            x: best_positions[ind].clone(),
+            x: fit_in_bounds(&best_positions[ind], &range_min, &range_max),
             f_x: best_errors[ind],
-            nfev: current_epoch * popsize as u64,
+            nfev: (current_epoch + 1) * popsize as u64,
             history: if use_history { Some(history) } else { None },
         };
         return result;

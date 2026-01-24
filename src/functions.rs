@@ -87,12 +87,12 @@ pub fn megacity(x: f32, y: f32) -> f32 {
 
 pub const TEST_FUNCTIONS: [TestFunction; 5] = [
     TestFunction {
-        name: "shifted sphere",
+        name: "shifted_sphere",
         func: shifted_sphere,
         bounds: SHIFTED_SPHERE_BOUNDS,
     },
     TestFunction {
-        name: "shifted weierstrass",
+        name: "shifted_weierstrass",
         func: shifted_weierstrass,
         bounds: SHIFTED_WEIERSTRASS_BOUNDS,
     },
