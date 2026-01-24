@@ -7,7 +7,7 @@ pub struct AlgorithmDescriptor {
 
 pub static DEFAULT_ANSR: ANSR = ANSR {
     popsize: 8,
-    tol: 0.01,
+    restart_tolerance: 0.01,
     sigma: 0.05,
     self_instead_neighbour: 0.8,
 };

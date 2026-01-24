@@ -9,7 +9,7 @@ use crate::{
 
 pub struct ANSR {
     pub popsize: usize,
-    pub tol: f32,
+    pub restart_tolerance: f32,
     pub sigma: f32,
     pub self_instead_neighbour: f32,
 }
@@ -46,7 +46,7 @@ impl Optimizer for ANSR {
         }
         let mut best_positions: Vec<Vec<f32>> = vec![vec![0.0; params]; popsize];
         let mut best_errors: Vec<f32> = vec![f32::INFINITY; popsize];
-        let tol = self.tol;
+        let restart_tolerance = self.restart_tolerance;
         let sigma = self.sigma;
         let normal = Normal::new(0.0, sigma).unwrap();
         let mut current_errors: Vec<f32> = vec![f32::INFINITY; popsize];
@@ -99,7 +99,7 @@ impl Optimizer for ANSR {
                         && f32::abs(
                             (best_errors[p] - best_errors[r])
                                 / f32::max(best_errors[p].abs(), best_errors[r].abs()),
-                        ) < tol
+                        ) < restart_tolerance
                     {
                         if r != ind {
                             best_errors[r] = f32::INFINITY;
