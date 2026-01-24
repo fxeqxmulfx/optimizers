@@ -1,5 +1,6 @@
 use optimizers::{
-    functions::TEST_FUNCTIONS, optimizers::ALGORITHMS, runner::run_multiple_optimizaions,
+    default_algorithms_params::ALGORITHMS, functions::TEST_FUNCTIONS,
+    runner::run_multiple_optimizaions,
 };
 
 fn main() {

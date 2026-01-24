@@ -2,7 +2,7 @@ use optimizers::{
     early_stop_callback::EarlyStopCallback,
     functions::TEST_FUNCTIONS,
     optimizer::Optimizer,
-    optimizers::ALGORITHMS,
+    default_algorithms_params::ALGORITHMS,
     plot::save_video_h264,
     utils::{broadcast, format_best_f_x_history, format_x_history},
 };
