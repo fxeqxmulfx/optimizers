@@ -29,7 +29,7 @@ impl Optimizer for ANSR {
     {
         let params = bounds.len();
         let popsize = self.popsize;
-        let max_epoch = f64::round(maxiter as f64 / popsize as f64) as u64;
+        let max_epoch = f64::ceil(maxiter as f64 / popsize as f64) as u64;
         let mut range_min: Vec<f32> = vec![0.0; params];
         let mut range_max: Vec<f32> = vec![0.0; params];
         for i in 0..params {
