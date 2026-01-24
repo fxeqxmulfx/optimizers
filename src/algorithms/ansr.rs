@@ -45,11 +45,11 @@ impl Optimizer for ANSR {
             }
         }
         let mut best_positions: Vec<Vec<f32>> = vec![vec![0.0; params]; popsize];
-        let mut best_errors: Vec<f32> = vec![f32::INFINITY; popsize];
+        let mut best_residuals: Vec<f32> = vec![f32::INFINITY; popsize];
         let restart_tolerance = self.restart_tolerance;
         let sigma = self.sigma;
         let normal = Normal::new(0.0, sigma).unwrap();
-        let mut current_errors: Vec<f32> = vec![f32::INFINITY; popsize];
+        let mut current_residuals: Vec<f32> = vec![f32::INFINITY; popsize];
         let mut ind = 0;
         let mut history = OptimizationHistory {
             x: Vec::new(),
@@ -57,31 +57,31 @@ impl Optimizer for ANSR {
         };
         if use_history {
             history.x.push(current_positions.clone());
-            history.f_x.push(current_errors.clone());
+            history.f_x.push(current_residuals.clone());
         }
         let mut current_epoch = 0;
         let popsize_distr = Uniform::new(0, popsize).unwrap();
         let self_instead_neighbour = self.self_instead_neighbour;
         for epoch in 0..max_epoch {
             for p in 0..popsize {
-                current_errors[p] = func(&fit_in_bounds(
+                current_residuals[p] = func(&fit_in_bounds(
                     &current_positions[p],
                     &range_min,
                     &range_max,
                 ))
             }
             for p in 0..popsize {
-                if current_errors[p] < best_errors[p] {
-                    best_errors[p] = current_errors[p];
+                if current_residuals[p] < best_residuals[p] {
+                    best_residuals[p] = current_residuals[p];
                     best_positions[p] = current_positions[p].clone();
-                    if best_errors[p] < best_errors[ind] {
+                    if best_residuals[p] < best_residuals[ind] {
                         ind = p;
                     }
                 }
             }
             if use_history {
                 history.x.push(best_positions.clone());
-                history.f_x.push(best_errors.clone());
+                history.f_x.push(best_residuals.clone());
             }
             current_epoch = epoch;
             if early_stop_callback.should_stop(&fit_in_bounds(
@@ -91,25 +91,37 @@ impl Optimizer for ANSR {
             )) {
                 break;
             }
-            for p in 0..popsize {
-                for r in (p + 1)..popsize {
-                    if best_errors[p] != f32::INFINITY
-                        && best_errors[r] != f32::INFINITY
-                        && f32::max(best_errors[p].abs(), best_errors[r].abs()) != 0.0
+            for lhs in 0..popsize {
+                for rhs in (lhs + 1)..popsize {
+                    if best_residuals[lhs] != f32::INFINITY
+                        && best_residuals[rhs] != f32::INFINITY
+                        && f32::max(best_residuals[lhs].abs(), best_residuals[rhs].abs()) != 0.0
                         && f32::abs(
-                            (best_errors[p] - best_errors[r])
-                                / f32::max(best_errors[p].abs(), best_errors[r].abs()),
+                            (best_residuals[lhs] - best_residuals[rhs])
+                                / f32::max(best_residuals[lhs].abs(), best_residuals[rhs].abs()),
                         ) < restart_tolerance
                     {
-                        if r != ind {
-                            best_errors[r] = f32::INFINITY;
+                        if lhs != ind && rhs != ind {
+                            if best_residuals[lhs] < best_residuals[rhs] {
+                                best_residuals[rhs] = f32::INFINITY;
+                                for d in 0..params {
+                                    best_positions[rhs][d] = random_distr.sample(&mut rng);
+                                }
+                            } else {
+                                best_residuals[lhs] = f32::INFINITY;
+                                for d in 0..params {
+                                    best_positions[lhs][d] = random_distr.sample(&mut rng);
+                                }
+                            }
+                        } else if lhs != ind {
+                            best_residuals[lhs] = f32::INFINITY;
                             for d in 0..params {
-                                best_positions[r][d] = random_distr.sample(&mut rng);
+                                best_positions[lhs][d] = random_distr.sample(&mut rng);
                             }
                         } else {
-                            best_errors[p] = f32::INFINITY;
+                            best_residuals[rhs] = f32::INFINITY;
                             for d in 0..params {
-                                best_positions[p][d] = random_distr.sample(&mut rng);
+                                best_positions[rhs][d] = random_distr.sample(&mut rng);
                             }
                         }
                     }
@@ -147,7 +159,7 @@ impl Optimizer for ANSR {
         }
         let result = OptimizerResult {
             x: fit_in_bounds(&best_positions[ind], &range_min, &range_max),
-            f_x: best_errors[ind],
+            f_x: best_residuals[ind],
             nfev: (current_epoch + 1) * popsize as u64,
             history: if use_history { Some(history) } else { None },
         };
