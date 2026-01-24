@@ -1,5 +1,15 @@
 # Optimizers
 
+Run the benchmark
+```bash
+cargo run --bin benchmark -r
+```
+
+Generate the plot
+```bash
+cargo run --bin plot -r
+```
+
 The table contains algorithms sorted by the average number of calls to a function of dimension 8 to achieve 99% infinium
 | №   | algorithm | params                                                       | mean     | shifted sphere | shifted weierstrass | hilly    | forest | megacity |
 | --- | --------- | ------------------------------------------------------------ | -------- | -------------- | ------------------- | -------- | ------ | -------- |
