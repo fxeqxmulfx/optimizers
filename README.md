@@ -10,7 +10,7 @@ Generate the plot
 cargo run --bin plot -r
 ```
 
-The table contains algorithms sorted by the average number of calls to a function of dimension 16 to achieve 99% infinium
+The table lists algorithms sorted by the average number of calls to 16-dimensional functions required to achieve the 99% infimum
 | №   | algorithm | params                                                                    | mean      | shifted_sphere | shifted_weierstrass | hilly    | forest   | megacity  |
 | --- | --------- | ------------------------------------------------------------------------- | --------- | -------------- | ------------------- | -------- | -------- | --------- |
 | 1   | ansr      | popsize:8, restart_tolerance:0.01, sigma:0.05, self_instead_neighbour:0.9 | 51300.832 | 646.68         | 23145.36            | 42157.08 | 11416.08 | 179138.95 |
