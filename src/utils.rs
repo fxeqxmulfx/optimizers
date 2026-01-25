@@ -1,3 +1,13 @@
+pub fn clamp_to_unit_cube(value: f32) -> f32 {
+    if value > 1.0 {
+        return 1.0;
+    }
+    if value < 0.0 {
+        return 0.0;
+    }
+    return value;
+}
+
 pub fn fit_in_bounds(values: &Vec<f32>, range_min: &Vec<f32>, range_max: &Vec<f32>) -> Vec<f32> {
     let values_len = values.len();
     let mut result = vec![0.0; values_len];

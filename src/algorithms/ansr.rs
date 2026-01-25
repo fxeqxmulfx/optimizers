@@ -4,7 +4,7 @@ use rand_distr::{Distribution, Normal, Uniform};
 use crate::{
     early_stop_callback::EarlyStopCallback,
     optimizer::{OptimizationHistory, Optimizer, OptimizerResult},
-    utils::fit_in_bounds,
+    utils::{clamp_to_unit_cube, fit_in_bounds},
 };
 
 pub struct ANSR {
@@ -38,10 +38,10 @@ impl Optimizer for ANSR {
         }
         let mut current_positions: Vec<Vec<f32>> = vec![vec![0.0; params]; popsize];
         let mut rng: StdRng = SeedableRng::seed_from_u64(seed);
-        let random_distr = Uniform::new_inclusive(0.0, 1.0).unwrap();
+        let random = Uniform::new_inclusive(0.0, 1.0).unwrap();
         for p in 0..popsize {
             for d in 0..params {
-                current_positions[p][d] = random_distr.sample(&mut rng);
+                current_positions[p][d] = random.sample(&mut rng);
             }
         }
         let mut best_positions: Vec<Vec<f32>> = vec![vec![0.0; params]; popsize];
@@ -105,23 +105,23 @@ impl Optimizer for ANSR {
                             if best_residuals[lhs] < best_residuals[rhs] {
                                 best_residuals[rhs] = f32::INFINITY;
                                 for d in 0..params {
-                                    best_positions[rhs][d] = random_distr.sample(&mut rng);
+                                    best_positions[rhs][d] = random.sample(&mut rng);
                                 }
                             } else {
                                 best_residuals[lhs] = f32::INFINITY;
                                 for d in 0..params {
-                                    best_positions[lhs][d] = random_distr.sample(&mut rng);
+                                    best_positions[lhs][d] = random.sample(&mut rng);
                                 }
                             }
                         } else if lhs != ind {
                             best_residuals[lhs] = f32::INFINITY;
                             for d in 0..params {
-                                best_positions[lhs][d] = random_distr.sample(&mut rng);
+                                best_positions[lhs][d] = random.sample(&mut rng);
                             }
                         } else {
                             best_residuals[rhs] = f32::INFINITY;
                             for d in 0..params {
-                                best_positions[rhs][d] = random_distr.sample(&mut rng);
+                                best_positions[rhs][d] = random.sample(&mut rng);
                             }
                         }
                     }
@@ -129,29 +129,21 @@ impl Optimizer for ANSR {
             }
             for p in 0..popsize {
                 for d in 0..params {
-                    if random_distr.sample(&mut rng) <= self_instead_neighbour {
-                        current_positions[p][d] = f32::min(
-                            f32::max(
-                                best_positions[p][d]
-                                    + normal.sample(&mut rng)
-                                        * f32::abs(best_positions[p][d] - current_positions[p][d]),
-                                0.0,
-                            ),
-                            1.0,
+                    if random.sample(&mut rng) <= self_instead_neighbour {
+                        current_positions[p][d] = clamp_to_unit_cube(
+                            best_positions[p][d]
+                                + normal.sample(&mut rng)
+                                    * f32::abs(best_positions[p][d] - current_positions[p][d]),
                         )
                     } else {
                         let mut r = popsize_distr.sample(&mut rng);
                         while r == p {
                             r = popsize_distr.sample(&mut rng);
                         }
-                        current_positions[p][d] = f32::min(
-                            f32::max(
-                                best_positions[r][d]
-                                    + normal.sample(&mut rng)
-                                        * f32::abs(best_positions[r][d] - current_positions[p][d]),
-                                0.0,
-                            ),
-                            1.0,
+                        current_positions[p][d] = clamp_to_unit_cube(
+                            best_positions[r][d]
+                                + normal.sample(&mut rng)
+                                    * f32::abs(best_positions[r][d] - current_positions[p][d]),
                         )
                     }
                 }
