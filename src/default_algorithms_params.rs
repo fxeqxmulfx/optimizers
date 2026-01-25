@@ -35,7 +35,7 @@ pub static DEFAULT_ANSR: ANSR = ANSR {
     self_instead_neighbour: 0.9,
 };
 
-pub static DEFAULT_ZERO_GRADIENT: ZeroGradient = ZeroGradient { init_jump: 0.25 };
+pub static DEFAULT_ZERO_GRADIENT: ZeroGradient = ZeroGradient { init_jump: 0.1 };
 
 pub const ALGORITHMS: [AlgorithmDescriptor; 2] = [
     AlgorithmDescriptor {
