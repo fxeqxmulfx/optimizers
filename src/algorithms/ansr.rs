@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use rand::{SeedableRng, rngs::StdRng};
 use rand_distr::{Distribution, Normal, Uniform};
 
@@ -12,6 +14,15 @@ pub struct ANSR {
     pub restart_tolerance: f32,
     pub sigma: f32,
     pub self_instead_neighbour: f32,
+}
+
+pub fn new_ansr(params: &BTreeMap<String, f32>) -> ANSR {
+    ANSR {
+        popsize: params["popsize"] as usize,
+        restart_tolerance: params["restart_tolerance"],
+        sigma: params["sigma"],
+        self_instead_neighbour: params["self_instead_neighbour"],
+    }
 }
 
 impl Optimizer for ANSR {

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 pub fn clamp_to_unit_cube(value: f32) -> f32 {
     if value > 1.0 {
@@ -53,31 +53,26 @@ pub fn broadcast<F>(func: F) -> impl Fn(&[f32]) -> f32 + Sync
 where
     F: Fn(f32, f32) -> f32 + Sync,
 {
-    return move |x: &[f32]| -> f32 {
-        let mut i = 1;
+    move |x: &[f32]| -> f32 {
         let x_len = x.len();
         if x_len == 0 {
             return f32::NAN;
         }
-        let mut result = 0.0;
-        while i < x_len {
-            result += func(x[i - 1], x[i]);
-            i += 2;
-        }
-        return result / x_len as f32 * 2.0;
-    };
+        let sum: f32 = x.chunks_exact(2).map(|pair| func(pair[0], pair[1])).sum();
+        (sum / x_len as f32) * 2.0
+    }
 }
 
-pub fn all_combinations(data: &HashMap<String, Vec<f64>>) -> Vec<HashMap<String, f64>> {
+pub fn all_combinations(data: &BTreeMap<String, Vec<f32>>) -> Vec<BTreeMap<String, f32>> {
     let keys: Vec<String> = data.keys().cloned().collect();
-    let values: Vec<Vec<f64>> = data.values().cloned().collect();
+    let values: Vec<Vec<f32>> = data.values().cloned().collect();
     let mut result = Vec::new();
     fn rec(
         keys: &[String],
-        values: &[Vec<f64>],
+        values: &[Vec<f32>],
         depth: usize,
-        current: &mut Vec<f64>,
-        out: &mut Vec<HashMap<String, f64>>,
+        current: &mut Vec<f32>,
+        out: &mut Vec<BTreeMap<String, f32>>,
     ) {
         if depth == keys.len() {
             let map = keys
@@ -98,24 +93,38 @@ pub fn all_combinations(data: &HashMap<String, Vec<f64>>) -> Vec<HashMap<String,
     result
 }
 
+pub fn f32_to_i64(x: f32) -> i64 {
+    if x.is_infinite() {
+        if x.is_sign_negative() {
+            i64::MIN
+        } else {
+            i64::MAX
+        }
+    } else if x.is_nan() {
+        0
+    } else {
+        x as i64
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn to_vec_map(single: &HashMap<String, f64>) -> HashMap<String, Vec<f64>> {
+    fn to_vec_map(single: &BTreeMap<String, f32>) -> BTreeMap<String, Vec<f32>> {
         single.iter().map(|(k, v)| (k.clone(), vec![*v])).collect()
     }
 
-    fn map_from_vecs(pairs: &[(&str, &[f64])]) -> HashMap<String, Vec<f64>> {
-        let mut m = HashMap::new();
+    fn map_from_vecs(pairs: &[(&str, &[f32])]) -> BTreeMap<String, Vec<f32>> {
+        let mut m = BTreeMap::new();
         for (k, v) in pairs {
             m.insert((*k).to_string(), (*v).to_vec());
         }
         m
     }
 
-    fn map_from_pairs(pairs: &[(&str, f64)]) -> HashMap<String, f64> {
-        let mut m = HashMap::new();
+    fn map_from_pairs(pairs: &[(&str, f32)]) -> BTreeMap<String, f32> {
+        let mut m = BTreeMap::new();
         for (k, v) in pairs {
             m.insert((*k).to_string(), *v);
         }
@@ -150,7 +159,7 @@ mod tests {
 
     #[test]
     fn test_no_keys() {
-        let input: HashMap<String, Vec<f64>> = HashMap::new();
+        let input: BTreeMap<String, Vec<f32>> = BTreeMap::new();
         let actual = all_combinations(&input);
         assert_eq!(actual.len(), 1);
         assert!(actual[0].is_empty());
@@ -180,7 +189,7 @@ mod tests {
 
     #[test]
     fn test_to_vec_map_conversion() {
-        let single: HashMap<String, f64> = map_from_pairs(&[("k1", 42.0), ("k2", 3.14)]);
+        let single: BTreeMap<String, f32> = map_from_pairs(&[("k1", 42.0), ("k2", 3.14)]);
         let vec_map = to_vec_map(&single);
         let actual = all_combinations(&vec_map);
         let expected = vec![map_from_pairs(&[("k1", 42.0), ("k2", 3.14)])];
@@ -294,5 +303,37 @@ mod tests {
         let input = map_from_vecs(&[("x", &[1.0, 2.0, 3.0]), ("y", &[4.0, 5.0]), ("z", &[6.0])]);
         let combos = all_combinations(&input);
         assert_eq!(combos.len(), 6);
+    }
+    #[test]
+    fn test_finite_positive() {
+        let val = 123.9_f32;
+        assert_eq!(f32_to_i64(val), 123);
+    }
+
+    #[test]
+    fn test_finite_negative() {
+        let val = -456.7_f32;
+        assert_eq!(f32_to_i64(val), -456);
+    }
+
+    #[test]
+    fn test_positive_infinity() {
+        assert_eq!(f32_to_i64(f32::INFINITY), i64::MAX);
+    }
+
+    #[test]
+    fn test_negative_infinity() {
+        assert_eq!(f32_to_i64(f32::NEG_INFINITY), i64::MIN);
+    }
+
+    #[test]
+    fn test_nan() {
+        assert_eq!(f32_to_i64(f32::NAN), 0);
+    }
+
+    #[test]
+    fn test_boundary_values() {
+        assert_eq!(f32_to_i64(i64::MAX as f32), i64::MAX);
+        assert_eq!(f32_to_i64(i64::MIN as f32), i64::MIN);
     }
 }

@@ -17,6 +17,8 @@ fn main() {
         maxiter,
         seed_count,
         stop_residual,
+        true,
+        true,
     );
     println!(
         "mean: {}, shifted_sphere: {}, shifted_weierstrass: {}, hilly: {}, forest: {}, megacity: {}",

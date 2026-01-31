@@ -17,6 +17,8 @@ pub fn run_multiple_optimizaions<T>(
     maxiter: u64,
     seed_count: u64,
     stop_residual: f32,
+    use_progress_bar: bool,
+    use_par_iter: bool,
 ) -> BTreeMap<String, f32>
 where
     T: Optimizer + Sync,
@@ -39,22 +41,20 @@ where
         let bounds = &function.bounds.repeat(dimension_count / 2);
         let mut total_nfev = 0;
         let early_stop_callback = EarlyStopCallback::new(func, stop_residual);
-        let results = (0..seed_count)
-            .collect::<Vec<u64>>()
-            .par_iter()
-            .map(|seed| {
-                let result = optimizer.find_infimum(
-                    func,
-                    bounds,
-                    maxiter,
-                    *seed,
-                    false,
-                    &early_stop_callback,
-                );
+        let compute = |seed: u64| {
+            let result =
+                optimizer.find_infimum(func, bounds, maxiter, seed, false, &early_stop_callback);
+
+            if use_progress_bar {
                 seed_pb.inc(1);
-                result
-            })
-            .collect::<Vec<OptimizerResult>>();
+            }
+            result
+        };
+        let results: Vec<OptimizerResult> = if use_par_iter {
+            (0..seed_count).into_par_iter().map(compute).collect()
+        } else {
+            (0..seed_count).into_iter().map(compute).collect()
+        };
         seed_pb.finish_and_clear();
         for result in results {
             if result.f_x <= stop_residual {
@@ -69,7 +69,9 @@ where
         } else {
             total_result.insert(func_name, f32::INFINITY);
         }
-        pb.inc(1);
+        if use_progress_bar {
+            pb.inc(1);
+        }
     }
     total_result.insert(
         "mean".to_string(),

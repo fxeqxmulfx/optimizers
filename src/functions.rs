@@ -21,16 +21,16 @@ pub fn shifted_sphere(x: f32, y: f32) -> f32 {
     scale(result, 0.0, 345.402914946, 0.0, 1.0)
 }
 
-fn _weierstrass(x: f32, a: f32, b: f32, k_max: usize) -> f32 {
+fn _weierstrass(x: f32, a: f32, b: f32) -> f32 {
     let mut total = 0.0_f32;
-    for k in 0..k_max {
+    for k in 0..=12 {
         total += a.powi(k as i32) * f32::cos(b.powi(k as i32) * PI * x);
     }
     total
 }
 
 fn _weierstrass_default(x: f32) -> f32 {
-    _weierstrass(x, 0.5, 7.0, 20)
+    _weierstrass(x, 0.5, 7.0)
 }
 
 pub const SHIFTED_WEIERSTRASS_BOUNDS: [[f32; 2]; 2] = [[-10.0, 10.0], [-10.0, 10.0]];
