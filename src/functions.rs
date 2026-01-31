@@ -112,3 +112,97 @@ pub const TEST_FUNCTIONS: [TestFunction; 5] = [
         bounds: MEGACITY_BOUNDS,
     },
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn approx_eq(a: f32, b: f32, eps: f32) {
+        assert!(
+            (a - b).abs() <= eps,
+            "values differ by more than {eps}\n  got   {a}\n  want {b}"
+        );
+    }
+
+    #[test]
+    fn test_scale_basic() {
+        assert_eq!(scale(0.0, 0.0, 2.0, 0.0, 1.0), 0.0);
+        assert_eq!(scale(2.0, 0.0, 2.0, 0.0, 1.0), 1.0);
+        assert_eq!(scale(1.0, 0.0, 2.0, 0.0, 1.0), 0.5);
+    }
+
+    #[test]
+    fn test_shifted_sphere_extrema() {
+        let v = shifted_sphere(-PI, -PI);
+        approx_eq(v, 0.0, 1e-6);
+        let v = shifted_sphere(10.0, 10.0);
+        approx_eq(v, 1.0, 1e-4);
+    }
+
+    #[test]
+    fn test_shifted_weierstrass_extrema() {
+        let v = shifted_weierstrass(-PI, -PI);
+        approx_eq(v, 1.0, 1e-4);
+    }
+
+    #[test]
+    fn test_hilly_in_bounds() {
+        for &(x, y) in &[(0.0, 0.0), (-3.0, 3.0), (3.0, -3.0), (1.0, -1.0)] {
+            let v = hilly(x, y);
+            assert!(
+                v >= 0.0 && v <= 1.0,
+                "hilly({},{}) out of bounds: {}",
+                x,
+                y,
+                v
+            );
+        }
+    }
+
+    #[test]
+    fn test_forest_in_bounds() {
+        for &(x, y) in &[(-43.5, -47.35), (-39.0, -40.0), (-41.0, -45.0)] {
+            let v = forest(x, y);
+            assert!(
+                v >= 0.0 && v <= 1.0,
+                "forest({},{}) out of bounds: {}",
+                x,
+                y,
+                v
+            );
+        }
+    }
+
+    #[test]
+    fn test_megacity_in_bounds() {
+        for &(x, y) in &[(-10.0, -10.5), (-2.0, 10.0), (-5.0, 0.0)] {
+            let v = megacity(x, y);
+            assert!(
+                v >= 0.0 && v <= 1.0,
+                "megacity({},{}) out of bounds: {}",
+                x,
+                y,
+                v
+            );
+        }
+    }
+
+    #[test]
+    fn test_test_functions_array() {
+        let expected = [
+            ("shifted_sphere", SHIFTED_SPHERE_BOUNDS),
+            ("shifted_weierstrass", SHIFTED_WEIERSTRASS_BOUNDS),
+            ("hilly", HILLY_BOUNDS),
+            ("forest", FOREST_BOUNDS),
+            ("megacity", MEGACITY_BOUNDS),
+        ];
+
+        assert_eq!(TEST_FUNCTIONS.len(), expected.len());
+
+        for (idx, (name, bounds)) in expected.iter().enumerate() {
+            let tf = &TEST_FUNCTIONS[idx];
+            assert_eq!(tf.name, *name, "name mismatch at index {}", idx);
+            assert_eq!(tf.bounds, *bounds, "bounds mismatch for {}", name);
+        }
+    }
+}

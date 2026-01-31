@@ -251,7 +251,7 @@ mod tests {
     fn test_format_best_f_x_history_empty_inner() {
         let values = vec![vec![], vec![2.0, -1.0]];
         let result = format_best_f_x_history(&values);
-        assert_eq!(result, vec![-1.0]); // only the second vector contributes
+        assert_eq!(result, vec![-1.0]);
     }
 
     #[test]
@@ -270,7 +270,6 @@ mod tests {
 
     #[test]
     fn test_broadcast_even_length() {
-        // Sum of consecutive pairs, then scaled
         let f = broadcast(|a, b| a + b);
         let result = f(&[1.0, 2.0, 3.0, 4.0]);
         assert_eq!(result, 5.0);
