@@ -88,10 +88,7 @@ const WEIERSTRASS_BK_PI: [f32; 27] = [
 pub fn weierstrass(x: Vec4) -> Vec4 {
     let mut total = Vec4::ZERO;
     for k in 0..=26 {
-        let ak = WEIERSTRASS_AK[k];
-        let bk_pi = WEIERSTRASS_BK_PI[k];
-        let term = ak * (bk_pi * x).cos();
-        total += term;
+        total += WEIERSTRASS_AK[k] * (WEIERSTRASS_BK_PI[k] * x).cos();
     }
     total
 }
