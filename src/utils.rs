@@ -108,8 +108,11 @@ where
     F: Fn(f32, f32) -> f32 + Sync,
 {
     move |x: &[f32]| -> f32 {
-        let sum: f32 = x.chunks_exact(2).map(|pair| func(pair[0], pair[1])).sum();
-        sum * 2.0 / x.len() as f32
+        x.chunks_exact(2)
+            .map(|pair| func(pair[0], pair[1]))
+            .sum::<f32>()
+            * 2.0
+            / x.len() as f32
     }
 }
 
@@ -118,11 +121,13 @@ where
     F: Fn(Vec4, Vec4) -> Vec4 + Sync,
 {
     move |x: &[Vec4]| {
-        let sum: f32 = x
-            .chunks_exact(2)
-            .map(|pair| func(pair[0], pair[1]).to_array().iter().sum::<f32>())
-            .sum();
-        sum / (x.len() * 2) as f32
+        x.chunks_exact(2)
+            .map(|pair| func(pair[0], pair[1]))
+            .sum::<Vec4>()
+            .to_array()
+            .iter()
+            .sum::<f32>()
+            / (x.len() * 2) as f32
     }
 }
 
@@ -131,16 +136,13 @@ where
     F: Fn(Vec4, Vec4) -> Vec4 + Sync,
 {
     move |x: &[f32]| -> f32 {
-        let sum: f32 = x
-            .chunks_exact(2)
-            .map(|pair| {
-                func(Vec4::splat(pair[0]), Vec4::splat(pair[1]))
-                    .to_array()
-                    .iter()
-                    .sum::<f32>()
-            })
-            .sum();
-        sum / (x.len() * 2) as f32
+        x.chunks_exact(2)
+            .map(|pair| func(Vec4::splat(pair[0]), Vec4::splat(pair[1])))
+            .sum::<Vec4>()
+            .to_array()
+            .iter()
+            .sum::<f32>()
+            / (x.len() * 2) as f32
     }
 }
 
