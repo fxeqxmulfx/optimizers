@@ -12,9 +12,9 @@ pub struct TestFunction {
 
 #[inline]
 fn scale(v: Vec4, in_min: f32, in_max: f32, out_min: f32, out_max: f32) -> Vec4 {
-    let in_range = Vec4::splat(in_max - in_min);
-    let out_range = Vec4::splat(out_max - out_min);
-    ((v - Vec4::splat(in_min)) / in_range) * out_range + Vec4::splat(out_min)
+    let in_range = in_max - in_min;
+    let out_range = out_max - out_min;
+    (v - in_min) / in_range * out_range + out_min
 }
 
 pub const SHIFTED_SPHERE_BOUNDS: [[f32; 2]; 2] = [[-10.0, 10.0], [-10.0, 10.0]];
@@ -26,20 +26,18 @@ pub fn shifted_sphere(x: Vec4, y: Vec4) -> Vec4 {
     scale(result, 0.0, 345.402914946, 0.0, 1.0)
 }
 
-fn _weierstrass(x: Vec4, a: Vec4, b: Vec4) -> Vec4 {
+static WEIERSTRASS_AK: Lazy<Vec<f32>> = Lazy::new(|| (0..=12).map(|k| 0.5_f32.powi(k)).collect());
+static WEIERSTRASS_BK: Lazy<Vec<f32>> = Lazy::new(|| (0..=12).map(|k| 7.0_f32.powi(k)).collect());
+
+fn weierstrass(x: Vec4) -> Vec4 {
     let mut total = Vec4::ZERO;
     for k in 0..=12 {
-        let kf = k as f32;
-        let ak = a.powf(kf);
-        let bk = b.powf(kf);
+        let ak = WEIERSTRASS_AK[k];
+        let bk = WEIERSTRASS_BK[k];
         let term = ak * (bk * PI * x).cos();
         total += term;
     }
     total
-}
-
-fn _weierstrass_default(x: Vec4) -> Vec4 {
-    _weierstrass(x, Vec4::splat(0.5), Vec4::splat(7.0))
 }
 
 pub const SHIFTED_WEIERSTRASS_BOUNDS: [[f32; 2]; 2] = [[-10.0, 10.0], [-10.0, 10.0]];
@@ -47,7 +45,7 @@ pub const SHIFTED_WEIERSTRASS_BOUNDS: [[f32; 2]; 2] = [[-10.0, 10.0], [-10.0, 10
 pub fn shifted_weierstrass(x: Vec4, y: Vec4) -> Vec4 {
     let x = x + PI;
     let y = y + PI;
-    let result = (_weierstrass_default(x) + _weierstrass_default(y)) / 2.0;
+    let result = (weierstrass(x) + weierstrass(y)) / 2.0;
     scale(result, -2.0, 2.0, 0.0, 1.0)
 }
 
