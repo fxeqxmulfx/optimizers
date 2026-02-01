@@ -14,7 +14,7 @@ use optimizers::{
 fn main() {
     let ansr_params = ANSR_PARAMS.clone();
     let functions = &TEST_FUNCTIONS;
-    let dimension_count = 16;
+    let dimension_count = 8;
     let maxiter = 300_000;
     let seed_count = 10;
     let stop_residual = 0.01;
