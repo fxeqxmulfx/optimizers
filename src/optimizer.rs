@@ -1,3 +1,5 @@
+use glam::Vec4;
+
 use crate::early_stop_callback::EarlyStopCallback;
 
 #[derive(Debug)]
@@ -25,5 +27,5 @@ pub trait Optimizer {
         early_stop_callback: &EarlyStopCallback<&F>,
     ) -> OptimizerResult
     where
-        F: Fn(&[f32]) -> f32 + Sync;
+        F: Fn(&[Vec4]) -> f32 + Sync;
 }

@@ -1,12 +1,13 @@
 use std::collections::BTreeMap;
 
+use glam::Vec4;
 use rand::{SeedableRng, rngs::StdRng};
 use rand_distr::{Distribution, Normal, Uniform};
 
 use crate::{
     early_stop_callback::EarlyStopCallback,
     optimizer::{OptimizationHistory, Optimizer, OptimizerResult},
-    utils::{clamp_to_unit_cube, fit_in_bounds},
+    utils::{clamp_to_unit_cube, fit_in_bounds, fit_in_bounds_simd},
 };
 
 pub struct ANSR {
@@ -36,7 +37,7 @@ impl Optimizer for ANSR {
         early_stop_callback: &EarlyStopCallback<&F>,
     ) -> OptimizerResult
     where
-        F: Fn(&[f32]) -> f32 + Sync,
+        F: Fn(&[Vec4]) -> f32 + Sync,
     {
         let params = bounds.len();
         let popsize = self.popsize;
@@ -75,7 +76,7 @@ impl Optimizer for ANSR {
         let self_instead_neighbour = self.self_instead_neighbour;
         for epoch in 0..max_epoch {
             for p in 0..popsize {
-                current_residuals[p] = func(&fit_in_bounds(
+                current_residuals[p] = func(&fit_in_bounds_simd(
                     &current_positions[p],
                     &range_min,
                     &range_max,
@@ -95,7 +96,7 @@ impl Optimizer for ANSR {
                 history.f_x.push(best_residuals.clone());
             }
             current_epoch = epoch;
-            if early_stop_callback.should_stop(&fit_in_bounds(
+            if early_stop_callback.should_stop(&fit_in_bounds_simd(
                 &best_positions[ind],
                 &range_min,
                 &range_max,

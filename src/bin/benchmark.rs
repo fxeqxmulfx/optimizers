@@ -7,7 +7,7 @@ fn main() {
     let optimizer = &DEFAULT_ANSR;
     let functions = &TEST_FUNCTIONS;
     let dimension_count = 16;
-    let maxiter = 100_000;
+    let maxiter = 1_000_000;
     let seed_count = 200;
     let stop_residual = 0.01;
     let result = run_multiple_optimizaions(

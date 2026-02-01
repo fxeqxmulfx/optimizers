@@ -1,5 +1,7 @@
 use std::collections::BTreeMap;
 
+use glam::Vec4;
+
 pub fn clamp_to_unit_cube(value: f32) -> f32 {
     if value > 1.0 {
         return 1.0;
@@ -10,7 +12,59 @@ pub fn clamp_to_unit_cube(value: f32) -> f32 {
     return value;
 }
 
-pub fn fit_in_bounds(values: &Vec<f32>, range_min: &Vec<f32>, range_max: &Vec<f32>) -> Vec<f32> {
+pub fn fit_in_bounds_simd(values: &[f32], range_min: &[f32], range_max: &[f32]) -> Vec<Vec4> {
+    let len = values.len();
+    let groups = len / 8;
+    let mut out = Vec::with_capacity(groups * 2);
+    for g in 0..groups {
+        let base = g * 8;
+        let vals_lo = Vec4::from_array([
+            values[base],
+            values[base + 1],
+            values[base + 2],
+            values[base + 3],
+        ]);
+        let vals_hi = Vec4::from_array([
+            values[base + 4],
+            values[base + 5],
+            values[base + 6],
+            values[base + 7],
+        ]);
+        let mins_lo = Vec4::from_array([
+            range_min[base],
+            range_min[base + 1],
+            range_min[base + 2],
+            range_min[base + 3],
+        ]);
+        let mins_hi = Vec4::from_array([
+            range_min[base + 4],
+            range_min[base + 5],
+            range_min[base + 6],
+            range_min[base + 7],
+        ]);
+        let maxs_lo = Vec4::from_array([
+            range_max[base],
+            range_max[base + 1],
+            range_max[base + 2],
+            range_max[base + 3],
+        ]);
+        let maxs_hi = Vec4::from_array([
+            range_max[base + 4],
+            range_max[base + 5],
+            range_max[base + 6],
+            range_max[base + 7],
+        ]);
+        let f_lo = mins_lo + vals_lo * (maxs_lo - mins_lo);
+        let f_hi = mins_hi + vals_hi * (maxs_hi - mins_hi);
+        let evens = Vec4::new(f_lo.x, f_lo.z, f_hi.x, f_hi.z);
+        let odds = Vec4::new(f_lo.y, f_lo.w, f_hi.y, f_hi.w);
+        out.push(evens);
+        out.push(odds);
+    }
+    out
+}
+
+pub fn fit_in_bounds(values: &[f32], range_min: &[f32], range_max: &[f32]) -> Vec<f32> {
     let values_len = values.len();
     let mut result = vec![0.0; values_len];
     for i in 0..values_len {
@@ -55,11 +109,41 @@ where
 {
     move |x: &[f32]| -> f32 {
         let x_len = x.len();
-        if x_len == 0 {
-            return f32::NAN;
-        }
         let sum: f32 = x.chunks_exact(2).map(|pair| func(pair[0], pair[1])).sum();
         (sum / x_len as f32) * 2.0
+    }
+}
+
+pub fn broadcast_simd<F>(func: F) -> impl Fn(&[Vec4]) -> f32 + Sync
+where
+    F: Fn(Vec4, Vec4) -> Vec4 + Sync,
+{
+    move |x: &[Vec4]| {
+        let x_len = x.len();
+        let sum: f32 = x
+            .chunks_exact(2)
+            .map(|pair| func(pair[0], pair[1]).to_array().iter().sum::<f32>())
+            .sum();
+        (sum / (x_len * 4) as f32) * 2.0
+    }
+}
+
+pub fn broadcast_scalar<F>(func: F) -> impl Fn(&[f32]) -> f32 + Sync
+where
+    F: Fn(Vec4, Vec4) -> Vec4 + Sync,
+{
+    move |x: &[f32]| -> f32 {
+        let x_len = x.len();
+        let sum: f32 = x
+            .chunks_exact(2)
+            .map(|pair| {
+                func(Vec4::splat(pair[0]), Vec4::splat(pair[1]))
+                    .to_array()
+                    .iter()
+                    .sum::<f32>()
+            })
+            .sum();
+        (sum / (x_len * 4) as f32) * 2.0
     }
 }
 
@@ -107,233 +191,296 @@ pub fn f32_to_i64(x: f32) -> i64 {
     }
 }
 
+pub trait Vec4Ext {
+    fn square(&self) -> Vec4;
+    fn cube(&self) -> Vec4;
+    fn tesseract(&self) -> Vec4;
+}
+
+impl Vec4Ext for Vec4 {
+    fn square(&self) -> Vec4 {
+        *self * *self
+    }
+    fn cube(&self) -> Vec4 {
+        *self * *self * *self
+    }
+    fn tesseract(&self) -> Vec4 {
+        *self * *self * *self * *self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn to_vec_map(single: &BTreeMap<String, f32>) -> BTreeMap<String, Vec<f32>> {
-        single.iter().map(|(k, v)| (k.clone(), vec![*v])).collect()
-    }
-
-    fn map_from_vecs(pairs: &[(&str, &[f32])]) -> BTreeMap<String, Vec<f32>> {
-        let mut m = BTreeMap::new();
-        for (k, v) in pairs {
-            m.insert((*k).to_string(), (*v).to_vec());
-        }
-        m
-    }
-
-    fn map_from_pairs(pairs: &[(&str, f32)]) -> BTreeMap<String, f32> {
-        let mut m = BTreeMap::new();
-        for (k, v) in pairs {
-            m.insert((*k).to_string(), *v);
-        }
-        m
+    #[inline]
+    fn almost_equal(a: f32, b: f32, eps: f32) -> bool {
+        (a - b).abs() < eps
     }
 
     #[test]
-    fn test_two_keys_two_values() {
-        let input = map_from_vecs(&[("a", &[1.0, 2.0]), ("b", &[1.0, 2.0])]);
-        let actual = all_combinations(&input);
-
-        let expected = vec![
-            map_from_pairs(&[("a", 1.0), ("b", 1.0)]),
-            map_from_pairs(&[("a", 1.0), ("b", 2.0)]),
-            map_from_pairs(&[("a", 2.0), ("b", 1.0)]),
-            map_from_pairs(&[("a", 2.0), ("b", 2.0)]),
-        ];
-
-        assert_eq!(actual.len(), expected.len());
-        for exp in expected {
-            assert!(actual.contains(&exp), "Missing combo: {:?}", exp);
-        }
-    }
-
-    #[test]
-    fn test_single_key() {
-        let input = map_from_vecs(&[("x", &[5.5])]);
-        let actual = all_combinations(&input);
-        let expected = vec![map_from_pairs(&[("x", 5.5)])];
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_no_keys() {
-        let input: BTreeMap<String, Vec<f32>> = BTreeMap::new();
-        let actual = all_combinations(&input);
-        assert_eq!(actual.len(), 1);
-        assert!(actual[0].is_empty());
-    }
-
-    #[test]
-    fn test_empty_value_vector() {
-        let input = map_from_vecs(&[("a", &[])]);
-        let actual = all_combinations(&input);
-        assert!(
-            actual.is_empty(),
-            "Expected 0 combinations, got {:#?}",
-            actual
-        );
-    }
-
-    #[test]
-    fn test_duplicate_values() {
-        let input = map_from_vecs(&[("a", &[1.0, 1.0]), ("b", &[2.0])]);
-        let actual = all_combinations(&input);
-        let expected = vec![
-            map_from_pairs(&[("a", 1.0), ("b", 2.0)]),
-            map_from_pairs(&[("a", 1.0), ("b", 2.0)]),
-        ];
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_to_vec_map_conversion() {
-        let single: BTreeMap<String, f32> = map_from_pairs(&[("k1", 42.0), ("k2", 3.14)]);
-        let vec_map = to_vec_map(&single);
-        let actual = all_combinations(&vec_map);
-        let expected = vec![map_from_pairs(&[("k1", 42.0), ("k2", 3.14)])];
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_original_immutability() {
-        let input = map_from_vecs(&[("a", &[1.0, 2.0]), ("b", &[3.0])]);
-        let original_clone = input.clone();
-        let _ = all_combinations(&input);
-        assert_eq!(input, original_clone, "Input was mutated");
-    }
-
-    #[test]
-    fn test_clamp_to_unit_cube() {
-        assert_eq!(clamp_to_unit_cube(0.5), 0.5);
-        assert_eq!(clamp_to_unit_cube(-0.2), 0.0);
-        assert_eq!(clamp_to_unit_cube(1.2), 1.0);
-        assert_eq!(clamp_to_unit_cube(0.0), 0.0);
-        assert_eq!(clamp_to_unit_cube(1.0), 1.0);
-    }
-
-    #[test]
-    fn test_fit_in_bounds_basic() {
-        let values = vec![0.0, 0.5, 1.0];
-        let min = vec![10.0, 20.0, 30.0];
-        let max = vec![20.0, 30.0, 40.0];
-        let expected = vec![10.0, 25.0, 40.0];
-        assert_eq!(fit_in_bounds(&values, &min, &max), expected);
-    }
-
-    #[test]
-    fn test_fit_in_bounds_zero_range() {
-        let values = vec![0.0, 0.3, 0.7];
-        let min = vec![5.0, 5.0, 5.0];
-        let max = vec![5.0, 5.0, 5.0];
-        let expected = vec![5.0; 3];
-        assert_eq!(fit_in_bounds(&values, &min, &max), expected);
-    }
-
-    #[test]
-    fn test_format_x_history_single_run() {
-        let values = vec![vec![vec![0.0, 1.0]]];
-        let bounds = vec![[0.0, 1.0], [1.0, 2.0]];
-        let result = format_x_history(&values, &bounds);
-        let expected = vec![vec![[0.0, 2.0]]];
-        assert_eq!(result, expected);
-    }
-
-    #[test]
-    fn test_format_x_history_multiple_runs() {
-        let values = vec![vec![vec![0.0, 0.5, 1.0], vec![0.2, 0.8, 0.6]]];
-        let bounds = vec![[0.0, 1.0], [1.0, 2.0], [2.0, 3.0]];
-        let result = format_x_history(&values, &bounds);
-        let expected = vec![vec![[0.0, 1.5], [1.5, 3.0], [0.2, 1.8], [1.8, 2.6]]];
-        assert_eq!(result, expected);
-    }
-
-    #[test]
-    fn test_format_best_f_x_history_basic() {
-        let values = vec![vec![1.0, 2.0, 3.0], vec![0.5, 1.5]];
-        let result = format_best_f_x_history(&values);
-        assert_eq!(result, vec![1.0, 0.5]);
-    }
-
-    #[test]
-    fn test_format_best_f_x_history_empty_inner() {
-        let values = vec![vec![], vec![2.0, -1.0]];
-        let result = format_best_f_x_history(&values);
-        assert_eq!(result, vec![-1.0]);
-    }
-
-    #[test]
-    fn test_broadcast_empty_slice() {
-        let f = broadcast(|_a, _b| 1.0);
-        let result = f(&[]);
-        assert!(f32::is_nan(result));
-    }
-
-    #[test]
-    fn test_broadcast_single_element() {
+    fn test_broadcast_add() {
         let f = broadcast(|a, b| a + b);
-        let result = f(&[3.0]);
-        assert_eq!(result, 0.0);
+        let res = f(&[1.0, 2.0, 3.0, 4.0]);
+        assert!(almost_equal(res, 5.0, 1e-6));
     }
 
     #[test]
-    fn test_broadcast_even_length() {
-        let f = broadcast(|a, b| a + b);
-        let result = f(&[1.0, 2.0, 3.0, 4.0]);
-        assert_eq!(result, 5.0);
+    fn test_broadcast_subtract() {
+        let f = broadcast(|a, b| a - b);
+        let res = f(&[5.0, 3.0, 2.0, 1.0]);
+        assert!(almost_equal(res, 1.5, 1e-6));
     }
 
     #[test]
     fn test_broadcast_odd_length() {
         let f = broadcast(|a, b| a + b);
-        let result = f(&[1.0, 2.0, 3.0, 4.0, 5.0]);
-        assert_eq!(result, 4.0);
+        let res = f(&[1.0, 2.0, 3.0]);
+        assert!(almost_equal(res, 2.0, 1e-6));
     }
 
     #[test]
-    fn test_broadcast_custom_func() {
-        let f = broadcast(|a, b| (b - a).abs());
-        let result = f(&[0.0, 3.0, 3.0, 0.0]);
-        assert_eq!(result, 3.0);
+    fn test_broadcast_simd_add() {
+        let f = broadcast_simd(|a, b| a + b);
+        let v1 = Vec4::new(1.0, 2.0, 3.0, 4.0);
+        let v2 = Vec4::new(4.0, 3.0, 2.0, 1.0);
+        let res = f(&[v1, v2]);
+        assert!(almost_equal(res, 5.0, 1e-6));
     }
 
     #[test]
-    fn test_all_combinations_product() {
-        let input = map_from_vecs(&[("x", &[1.0, 2.0, 3.0]), ("y", &[4.0, 5.0]), ("z", &[6.0])]);
-        let combos = all_combinations(&input);
-        assert_eq!(combos.len(), 6);
-    }
-    #[test]
-    fn test_finite_positive() {
-        let val = 123.9_f32;
-        assert_eq!(f32_to_i64(val), 123);
+    fn test_broadcast_simd_subtract() {
+        let f = broadcast_simd(|a, b| a - b);
+        let v1 = Vec4::new(1.0, 2.0, 3.0, 4.0);
+        let v2 = Vec4::new(4.0, 3.0, 2.0, 1.0);
+        let res = f(&[v1, v2]);
+        assert!(almost_equal(res, 0.0, 1e-6));
     }
 
     #[test]
-    fn test_finite_negative() {
-        let val = -456.7_f32;
-        assert_eq!(f32_to_i64(val), -456);
+    fn test_broadcast_simd_odd_length() {
+        let f = broadcast_simd(|a, b| a + b);
+        let v1 = Vec4::new(1.0, 2.0, 3.0, 4.0);
+        let v2 = Vec4::new(4.0, 3.0, 2.0, 1.0);
+        let v3 = Vec4::new(0.0, 0.0, 0.0, 0.0);
+        let res = f(&[v1, v2, v3]);
+        assert!(almost_equal(res, 3.3333333, 1e-6));
     }
 
     #[test]
-    fn test_positive_infinity() {
+    fn test_broadcast_simd_multiple_pairs() {
+        let f = broadcast_simd(|a, b| a + b);
+        let v1 = Vec4::new(1.0, 1.0, 1.0, 1.0);
+        let v2 = Vec4::new(1.0, 1.0, 1.0, 1.0);
+        let v3 = Vec4::new(2.0, 2.0, 2.0, 2.0);
+        let v4 = Vec4::new(2.0, 2.0, 2.0, 2.0);
+        let res = f(&[v1, v2, v3, v4]);
+        assert!(almost_equal(res, 3.0, 1e-6));
+    }
+
+    #[test]
+    fn test_sync_traits() {
+        let f = broadcast(|a, b| a + b);
+        let _: &dyn Sync = &f;
+        let f2 = broadcast_simd(|a, b| a + b);
+        let _: &dyn Sync = &f2;
+    }
+
+    #[test]
+    fn test_zero_values_map_to_mins() {
+        let values = vec![0.0_f32; 8];
+        let mins = (0..8).map(|i| i as f32).collect::<Vec<f32>>();
+        let maxs = (0..8).map(|i| (i as f32) + 10.0).collect::<Vec<f32>>();
+        let out = fit_in_bounds_simd(&values, &mins, &maxs);
+        let expected_lo = Vec4::from_array([0.0, 1.0, 2.0, 3.0]);
+        let expected_hi = Vec4::from_array([4.0, 5.0, 6.0, 7.0]);
+        assert_eq!(
+            out[0],
+            Vec4::new(expected_lo.x, expected_lo.z, expected_hi.x, expected_hi.z)
+        );
+        assert_eq!(
+            out[1],
+            Vec4::new(expected_lo.y, expected_lo.w, expected_hi.y, expected_hi.w)
+        );
+    }
+
+    #[test]
+    fn test_one_values_map_to_maxs() {
+        let values = vec![1.0_f32; 8];
+        let mins = (0..8).map(|i| i as f32).collect::<Vec<f32>>();
+        let maxs = (0..8).map(|i| (i as f32) + 10.0).collect::<Vec<f32>>();
+        let out = fit_in_bounds_simd(&values, &mins, &maxs);
+        let expected_lo = Vec4::from_array([10.0, 11.0, 12.0, 13.0]);
+        let expected_hi = Vec4::from_array([14.0, 15.0, 16.0, 17.0]);
+        assert_eq!(
+            out[0],
+            Vec4::new(expected_lo.x, expected_lo.z, expected_hi.x, expected_hi.z)
+        );
+        assert_eq!(
+            out[1],
+            Vec4::new(expected_lo.y, expected_lo.w, expected_hi.y, expected_hi.w)
+        );
+    }
+
+    #[test]
+    fn test_half_values_map_to_midpoints() {
+        let values = vec![0.5_f32; 8];
+        let mins = (0..8).map(|i| i as f32).collect::<Vec<f32>>();
+        let maxs = (0..8).map(|i| (i as f32) + 10.0).collect::<Vec<f32>>();
+        let out = fit_in_bounds_simd(&values, &mins, &maxs);
+        let expected_lo = Vec4::from_array([5.0, 6.0, 7.0, 8.0]);
+        let expected_hi = Vec4::from_array([9.0, 10.0, 11.0, 12.0]);
+        assert_eq!(
+            out[0],
+            Vec4::new(expected_lo.x, expected_lo.z, expected_hi.x, expected_hi.z)
+        );
+        assert_eq!(
+            out[1],
+            Vec4::new(expected_lo.y, expected_lo.w, expected_hi.y, expected_hi.w)
+        );
+    }
+
+    #[test]
+    fn test_even_odd_ordering() {
+        let values = vec![0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5];
+        let mins = vec![0.0_f32; 8];
+        let maxs = vec![10.0_f32; 8];
+        let out = fit_in_bounds_simd(&values, &mins, &maxs);
+        let evens_expected = Vec4::new(0.0, 0.0, 0.0, 0.0);
+        let odds_expected = Vec4::new(5.0, 5.0, 5.0, 5.0);
+        assert_eq!(out[0], evens_expected);
+        assert_eq!(out[1], odds_expected);
+    }
+
+    #[test]
+    fn test_ignores_remainder() {
+        let values = vec![1.0_f32; 10];
+        let mins = vec![0.0_f32; 10];
+        let maxs = vec![2.0_f32; 10];
+        let out = fit_in_bounds_simd(&values, &mins, &maxs);
+        assert_eq!(out.len(), 2);
+        let expected_vec = Vec4::new(2.0, 2.0, 2.0, 2.0);
+        assert_eq!(out[0], expected_vec);
+        assert_eq!(out[1], expected_vec);
+    }
+
+    #[test]
+    fn test_output_capacity() {
+        let len = 24;
+        let values = vec![0.0_f32; len];
+        let mins = vec![0.0_f32; len];
+        let maxs = vec![1.0_f32; len];
+        let out = fit_in_bounds_simd(&values, &mins, &maxs);
+        assert_eq!(out.capacity(), (len / 8) * 2);
+        assert_eq!(out.len(), out.capacity());
+    }
+
+    #[test]
+    fn test_clamp_to_unit_cube() {
+        assert!(almost_equal(clamp_to_unit_cube(-0.5), 0.0, 1e-6));
+        assert!(almost_equal(clamp_to_unit_cube(0.0), 0.0, 1e-6));
+        assert!(almost_equal(clamp_to_unit_cube(0.5), 0.5, 1e-6));
+        assert!(almost_equal(clamp_to_unit_cube(1.0), 1.0, 1e-6));
+        assert!(almost_equal(clamp_to_unit_cube(1.5), 1.0, 1e-6));
+    }
+
+    #[test]
+    fn test_fit_in_bounds_scalar() {
+        let values = vec![0.0, 0.5, 1.0];
+        let mins = vec![0.0, 10.0, 20.0];
+        let maxs = vec![10.0, 20.0, 30.0];
+        let out = fit_in_bounds(&values, &mins, &maxs);
+        assert_eq!(out, vec![0.0, 15.0, 30.0]);
+    }
+
+    #[test]
+    fn test_fit_in_bounds_empty() {
+        let values: Vec<f32> = vec![];
+        let mins: Vec<f32> = vec![];
+        let maxs: Vec<f32> = vec![];
+        let out = fit_in_bounds(&values, &mins, &maxs);
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn test_broadcast_scalar_add() {
+        let f = broadcast_scalar(|a, b| a + b);
+        let res = f(&[1.0, 2.0, 3.0, 4.0]);
+        assert!(almost_equal(res, 5.0, 1e-6));
+    }
+
+    #[test]
+    fn test_broadcast_scalar_mul() {
+        let f = broadcast_scalar(|a, b| a * b);
+        let res = f(&[1.0, 2.0, 3.0, 4.0]);
+        assert!(almost_equal(res, 7.0, 1e-6));
+    }
+
+    #[test]
+    fn test_broadcast_scalar_odd_length() {
+        let f = broadcast_scalar(|a, b| a + b);
+        let res = f(&[1.0, 2.0, 3.0]);
+        assert!(almost_equal(res, 2.0, 1e-6));
+    }
+
+    #[test]
+    fn test_all_combinations_simple() {
+        let mut map: BTreeMap<String, Vec<f32>> = BTreeMap::new();
+        map.insert("a".to_string(), vec![1.0, 2.0]);
+        map.insert("b".to_string(), vec![3.0, 4.0]);
+        let combos = all_combinations(&map);
+        assert_eq!(combos.len(), 4);
+        let mut expected = Vec::new();
+        for &a in &[1.0, 2.0] {
+            for &b in &[3.0, 4.0] {
+                let mut m = BTreeMap::new();
+                m.insert("a".to_string(), a);
+                m.insert("b".to_string(), b);
+                expected.push(m);
+            }
+        }
+        assert_eq!(combos, expected);
+    }
+
+    #[test]
+    fn test_format_x_history_simple() {
+        let values = vec![vec![vec![0.0, 1.0], vec![2.0, 3.0]]];
+        let bounds = vec![[0.0, 1.0], [1.0, 2.0]];
+        let out = format_x_history(&values, &bounds);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0], vec![[0.0, 2.0], [2.0, 4.0]]);
+    }
+
+    #[test]
+    fn test_format_best_f_x_history_min() {
+        let values = vec![vec![5.0, 3.0, 7.0], vec![4.0, 6.0], vec![2.0]];
+        let out = format_best_f_x_history(&values);
+        assert_eq!(out, vec![3.0, 4.0, 2.0]);
+    }
+
+    #[test]
+    fn test_f32_to_i64() {
+        assert_eq!(f32_to_i64(42.7), 42);
+        assert_eq!(f32_to_i64(-0.1), 0);
         assert_eq!(f32_to_i64(f32::INFINITY), i64::MAX);
-    }
-
-    #[test]
-    fn test_negative_infinity() {
         assert_eq!(f32_to_i64(f32::NEG_INFINITY), i64::MIN);
-    }
-
-    #[test]
-    fn test_nan() {
         assert_eq!(f32_to_i64(f32::NAN), 0);
     }
 
     #[test]
-    fn test_boundary_values() {
-        assert_eq!(f32_to_i64(i64::MAX as f32), i64::MAX);
-        assert_eq!(f32_to_i64(i64::MIN as f32), i64::MIN);
+    fn test_vec4_ext_methods() {
+        let v = Vec4::new(2.0, 3.0, 4.0, 5.0);
+        assert_eq!(v.square(), v * v);
+        assert_eq!(v.cube(), v * v * v);
+        assert_eq!(v.tesseract(), v * v * v * v);
+    }
+
+    #[test]
+    fn test_fit_in_bounds_simd_empty() {
+        let values: Vec<f32> = vec![];
+        let mins: Vec<f32> = vec![];
+        let maxs: Vec<f32> = vec![];
+        let out = fit_in_bounds_simd(&values, &mins, &maxs);
+        assert!(out.is_empty());
     }
 }

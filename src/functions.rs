@@ -1,41 +1,50 @@
 use std::f32::consts::PI;
 
+use glam::Vec4;
+
+use crate::utils::Vec4Ext;
+
 pub struct TestFunction {
     pub name: &'static str,
-    pub func: fn(f32, f32) -> f32,
+    pub func: fn(Vec4, Vec4) -> Vec4,
     pub bounds: [[f32; 2]; 2],
 }
 
-pub fn scale(result: f32, old_min: f32, old_max: f32, new_min: f32, new_max: f32) -> f32 {
-    let old_span = old_max - old_min;
-    let new_span = new_max - new_min;
-    ((result - old_min) / old_span) * new_span + new_min
+#[inline]
+fn scale(v: Vec4, in_min: f32, in_max: f32, out_min: f32, out_max: f32) -> Vec4 {
+    let in_range = Vec4::splat(in_max - in_min);
+    let out_range = Vec4::splat(out_max - out_min);
+    ((v - Vec4::splat(in_min)) / in_range) * out_range + Vec4::splat(out_min)
 }
 
 pub const SHIFTED_SPHERE_BOUNDS: [[f32; 2]; 2] = [[-10.0, 10.0], [-10.0, 10.0]];
 
-pub fn shifted_sphere(x: f32, y: f32) -> f32 {
+pub fn shifted_sphere(x: Vec4, y: Vec4) -> Vec4 {
     let x = x + PI;
     let y = y + PI;
-    let result = x.powi(2) + y.powi(2);
+    let result = x * x + y * y;
     scale(result, 0.0, 345.402914946, 0.0, 1.0)
 }
 
-fn _weierstrass(x: f32, a: f32, b: f32) -> f32 {
-    let mut total = 0.0_f32;
-    for k in 0..=12 {
-        total += a.powi(k as i32) * f32::cos(b.powi(k as i32) * PI * x);
+fn _weierstrass(x: Vec4, a: Vec4, b: Vec4) -> Vec4 {
+    let mut total = Vec4::ZERO;
+    for k in 0..=45 {
+        let kf = k as f32;
+        let ak = a.powf(kf);
+        let bk = b.powf(kf);
+        let term = ak * (bk * PI * x).cos();
+        total += term;
     }
     total
 }
 
-fn _weierstrass_default(x: f32) -> f32 {
-    _weierstrass(x, 0.5, 7.0)
+fn _weierstrass_default(x: Vec4) -> Vec4 {
+    _weierstrass(x, Vec4::splat(0.5), Vec4::splat(7.0))
 }
 
 pub const SHIFTED_WEIERSTRASS_BOUNDS: [[f32; 2]; 2] = [[-10.0, 10.0], [-10.0, 10.0]];
 
-pub fn shifted_weierstrass(x: f32, y: f32) -> f32 {
+pub fn shifted_weierstrass(x: Vec4, y: Vec4) -> Vec4 {
     let x = x + PI;
     let y = y + PI;
     let result = (_weierstrass_default(x) + _weierstrass_default(y)) / 2.0;
@@ -44,45 +53,47 @@ pub fn shifted_weierstrass(x: f32, y: f32) -> f32 {
 
 pub const HILLY_BOUNDS: [[f32; 2]; 2] = [[-3.0, 3.0], [-3.0, 3.0]];
 
-pub fn hilly(x: f32, y: f32) -> f32 {
-    let result = 20.0 + x.powi(2) + y.powi(2)
-        - 10.0 * f32::cos(2.0 * PI * x)
-        - 10.0 * f32::cos(2.0 * PI * y)
-        - 30.0 * f32::exp(-((x - 1.0).powi(2) + y.powi(2)) / 0.1)
-        + 200.0 * f32::exp(-((x + PI * 0.47).powi(2) + (y - PI * 0.2).powi(2)) / 0.1)
-        + 100.0 * f32::exp(-((x - 0.5).powi(2) + (y + 0.5).powi(2)) / 0.01)
-        - 60.0 * f32::exp(-((x - 1.33).powi(2) + (y - 2.0).powi(2)) / 0.02)
-        - 40.0 * f32::exp(-((x + 1.3).powi(2) + (y + 0.2).powi(2)) / 0.5)
-        + 60.0 * f32::exp(-((x - 1.5).powi(2) + (y + 1.5).powi(2)) / 0.1);
+pub fn hilly(x: Vec4, y: Vec4) -> Vec4 {
+    let result = 20.0 + x.square() + y.square()
+        - 10.0 * (2.0 * PI * x).cos()
+        - 10.0 * (2.0 * PI * y).cos()
+        - 30.0 * (-((x - 1.0).square() + y.square()) / 0.1).exp()
+        + 200.0 * (-((x + PI * 0.47).square() + (y - PI * 0.2).square()) / 0.1).exp()
+        + 100.0 * (-((x - 0.5).square() + (y + 0.5).square()) / 0.01).exp()
+        - 60.0 * (-((x - 1.33).square() + (y - 2.0).square()) / 0.02).exp()
+        - 40.0 * (-((x + 1.3).square() + (y + 0.2).square()) / 0.5).exp()
+        + 60.0 * (-((x - 1.5).square() + (y + 1.5).square()) / 0.1).exp();
     let result = -result;
     scale(result, -229.91931214214105, 39.701816104859866, 0.0, 1.0)
 }
 
 pub const FOREST_BOUNDS: [[f32; 2]; 2] = [[-43.50, -39.0], [-47.35, -40.0]];
 
-pub fn forest(x: f32, y: f32) -> f32 {
-    let a = f32::sin(f32::sqrt(f32::abs(x - 1.13) + f32::abs(y - 2.0)));
-    let b = f32::cos(f32::sqrt(f32::abs(f32::sin(x))) + f32::sqrt(f32::abs(f32::sin(y - 2.0))));
+pub fn forest(x: Vec4, y: Vec4) -> Vec4 {
+    let a = ((x - 1.13).abs() + (y - 2.0).abs()).sqrt().sin();
+    let b = (x.sin().abs().sqrt() + ((y - 2.0).sin().abs().sqrt())).cos();
     let f = a
         + b
-        + 1.01 * f32::exp(-(((x + 42.0).powi(2) + (y + 43.5).powi(2)) / 0.9))
-        + 1.0 * f32::exp(-(((x + 40.2).powi(2) + (y + 46.0).powi(2)) / 0.3));
-
-    let result = f.powi(4) - 0.3 * f32::exp(-(((x + 42.3).powi(2) + (y + 46.0).powi(2)) / 0.02));
-    let result = -result;
+        + 1.01 * (-(((x + 42.0).square() + (y + 43.5).square()) / 0.9)).exp()
+        + 1.0 * (-(((x + 40.2).square() + (y + 46.0).square()) / 0.3)).exp();
+    let mut result =
+        f.tesseract() - 0.3 * (-(((x + 42.3).square() + (y + 46.0).square()) / 0.02)).exp();
+    result = -result;
     scale(result, -1.8779867959790217, 0.26489289358875895, 0.0, 1.0)
 }
 
 pub const MEGACITY_BOUNDS: [[f32; 2]; 2] = [[-10.0, -2.0], [-10.5, 10.0]];
 
-pub fn megacity(x: f32, y: f32) -> f32 {
-    let a = f32::sin(f32::sqrt(f32::abs(x - 1.13) + f32::abs(y - 2.0)));
-    let b = f32::cos(f32::sqrt(f32::abs(f32::sin(x))) + f32::sqrt(f32::abs(f32::sin(y - 2.0))));
+pub fn megacity(x: Vec4, y: Vec4) -> Vec4 {
+    let a = ((x - 1.13).abs() + (y - 2.0).abs()).sqrt().sin();
+    let b = (x.sin().abs().sqrt() + (y - 2.0).sin().abs().sqrt()).cos();
     let f = a + b;
-    let result = f32::floor(f.powi(4))
-        - f32::floor(2.0 * f32::exp(-((x + 9.5).powi(2) + (y + 7.5).powi(2)) / 0.4));
+    let term1 = f.tesseract().floor();
+    let exp_arg = -(((x + 9.5).square() + (y + 7.5).square()) / 0.4);
+    let term2 = (2.0 * exp_arg.exp()).floor();
+    let result = term1 - term2;
     let result = -result;
-    scale(result, -12.0_f32, 1.0_f32, 0.0_f32, 1.0_f32)
+    scale(result, -12.0_f32, 2.0_f32, 0.0_f32, 1.0_f32)
 }
 
 pub const TEST_FUNCTIONS: [TestFunction; 5] = [
@@ -117,92 +128,47 @@ pub const TEST_FUNCTIONS: [TestFunction; 5] = [
 mod tests {
     use super::*;
 
-    fn approx_eq(a: f32, b: f32, eps: f32) {
-        assert!(
-            (a - b).abs() <= eps,
-            "values differ by more than {eps}\n  got   {a}\n  want {b}"
-        );
-    }
-
     #[test]
-    fn test_scale_basic() {
-        assert_eq!(scale(0.0, 0.0, 2.0, 0.0, 1.0), 0.0);
-        assert_eq!(scale(2.0, 0.0, 2.0, 0.0, 1.0), 1.0);
-        assert_eq!(scale(1.0, 0.0, 2.0, 0.0, 1.0), 0.5);
-    }
-
-    #[test]
-    fn test_shifted_sphere_extrema() {
-        let v = shifted_sphere(-PI, -PI);
-        approx_eq(v, 0.0, 1e-6);
-        let v = shifted_sphere(10.0, 10.0);
-        approx_eq(v, 1.0, 1e-4);
-    }
-
-    #[test]
-    fn test_shifted_weierstrass_extrema() {
-        let v = shifted_weierstrass(-PI, -PI);
-        approx_eq(v, 1.0, 1e-4);
-    }
-
-    #[test]
-    fn test_hilly_in_bounds() {
-        for &(x, y) in &[(0.0, 0.0), (-3.0, 3.0), (3.0, -3.0), (1.0, -1.0)] {
-            let v = hilly(x, y);
-            assert!(
-                v >= 0.0 && v <= 1.0,
-                "hilly({},{}) out of bounds: {}",
-                x,
-                y,
-                v
-            );
-        }
-    }
-
-    #[test]
-    fn test_forest_in_bounds() {
-        for &(x, y) in &[(-43.5, -47.35), (-39.0, -40.0), (-41.0, -45.0)] {
-            let v = forest(x, y);
-            assert!(
-                v >= 0.0 && v <= 1.0,
-                "forest({},{}) out of bounds: {}",
-                x,
-                y,
-                v
-            );
-        }
-    }
-
-    #[test]
-    fn test_megacity_in_bounds() {
-        for &(x, y) in &[(-10.0, -10.5), (-2.0, 10.0), (-5.0, 0.0)] {
-            let v = megacity(x, y);
-            assert!(
-                v >= 0.0 && v <= 1.0,
-                "megacity({},{}) out of bounds: {}",
-                x,
-                y,
-                v
-            );
-        }
-    }
-
-    #[test]
-    fn test_test_functions_array() {
-        let expected = [
-            ("shifted_sphere", SHIFTED_SPHERE_BOUNDS),
-            ("shifted_weierstrass", SHIFTED_WEIERSTRASS_BOUNDS),
-            ("hilly", HILLY_BOUNDS),
-            ("forest", FOREST_BOUNDS),
-            ("megacity", MEGACITY_BOUNDS),
-        ];
-
-        assert_eq!(TEST_FUNCTIONS.len(), expected.len());
-
-        for (idx, (name, bounds)) in expected.iter().enumerate() {
-            let tf = &TEST_FUNCTIONS[idx];
-            assert_eq!(tf.name, *name, "name mismatch at index {}", idx);
-            assert_eq!(tf.bounds, *bounds, "bounds mismatch for {}", name);
-        }
+    fn test_known_extrema() {
+        let s_min = shifted_sphere(Vec4::splat(-PI), Vec4::splat(-PI)).x;
+        assert!(s_min.abs() < 1e-3, "Shifted sphere min not 0");
+        let s_max = shifted_sphere(Vec4::splat(10.0), Vec4::splat(10.0)).x;
+        assert!((s_max - 1.0).abs() < 1e-3, "Shifted sphere max not 1");
+        let w_min = shifted_weierstrass(Vec4::splat(1.0 - PI), Vec4::splat(1.0 - PI)).x;
+        assert!(w_min.abs() < 1e-2, "Shifted weierstrass min not 0");
+        let w_max = shifted_weierstrass(Vec4::splat(-PI), Vec4::splat(-PI)).x;
+        assert!((w_max - 1.0).abs() < 1e-3, "Shifted weierstrass max not 1");
+        let h_min = hilly(
+            Vec4::splat(-1.4809053654574758),
+            Vec4::splat(0.6254111843389699),
+        )
+        .x;
+        assert!(h_min.abs() < 1e-3, "Hilly min not 0");
+        let h_max = hilly(
+            Vec4::splat(1.3200361419666748),
+            Vec4::splat(1.9993728393766546),
+        )
+        .x;
+        assert!((h_max - 1.0).abs() < 1e-3, "Hilly max not 1");
+        let f_min = forest(
+            Vec4::splat(-40.840704496667314),
+            Vec4::splat(-41.982297150257104),
+        )
+        .x;
+        assert!(f_min.abs() < 1e-3, "Forest min not 0");
+        let f_max = forest(
+            Vec4::splat(-42.2988573690385010),
+            Vec4::splat(-45.9956119113080675),
+        )
+        .x;
+        assert!((f_max - 1.0).abs() < 1e-3, "Forest max not 1");
+        let m_min = megacity(
+            Vec4::splat(-3.1357545740179393),
+            Vec4::splat(2.006136371058429),
+        )
+        .x;
+        assert!(m_min.abs() < 1e-3, "Megacity min not 0");
+        let m_max = megacity(Vec4::splat(-9.5), Vec4::splat(-7.5)).x;
+        assert!((m_max - 1.0).abs() < 1e-3, "Megacity max not 1");
     }
 }

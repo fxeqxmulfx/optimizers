@@ -7,7 +7,7 @@ use crate::{
     early_stop_callback::EarlyStopCallback,
     functions::TestFunction,
     optimizer::{Optimizer, OptimizerResult},
-    utils::broadcast,
+    utils::broadcast_simd,
 };
 
 pub fn run_multiple_optimizaions<T>(
@@ -37,7 +37,7 @@ where
         let seed_pb = m.add(_seed_pb);
         seed_pb.set_style(sty.clone());
         let func_name = function.name.to_string();
-        let func = &broadcast(&function.func);
+        let func = &broadcast_simd(&function.func);
         let bounds = &function.bounds.repeat(dimension_count / 2);
         let mut total_nfev = 0;
         let early_stop_callback = EarlyStopCallback::new(func, stop_residual);
