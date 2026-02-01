@@ -36,6 +36,7 @@ where
         let _seed_pb = ProgressBar::new(seed_count);
         let seed_pb = m.add(_seed_pb);
         seed_pb.set_style(sty.clone());
+        seed_pb.set_message(function_name.clone());
         let func = &broadcast_simd(&function.func);
         let bounds = &function.bounds.repeat(dimension_count / 2);
         let mut total_nfev = 0;
