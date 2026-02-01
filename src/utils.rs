@@ -124,9 +124,7 @@ where
         x.chunks_exact(2)
             .map(|pair| func(pair[0], pair[1]))
             .sum::<Vec4>()
-            .to_array()
-            .iter()
-            .sum::<f32>()
+            .dot(Vec4::ONE)
             / (x.len() * 2) as f32
     }
 }
@@ -139,9 +137,7 @@ where
         x.chunks_exact(2)
             .map(|pair| func(Vec4::splat(pair[0]), Vec4::splat(pair[1])))
             .sum::<Vec4>()
-            .to_array()
-            .iter()
-            .sum::<f32>()
+            .dot(Vec4::ONE)
             / (x.len() * 2) as f32
     }
 }
