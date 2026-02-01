@@ -55,90 +55,45 @@ const WEIERSTRASS_AK: [f32; 27] = [
     1.4901161e-8,
 ];
 
-const WEIERSTRASS_BK: [f32; 27] = [
-    1.0,
-    7.0,
-    49.0,
-    343.0,
-    2401.0,
-    16807.0,
-    117649.0,
-    823543.0,
-    5764801.0,
-    40353610.0,
-    282475260.0,
-    1977326700.0,
-    13841287000.0,
-    96889010000.0,
-    678223100000.0,
-    4747561500000.0,
-    33232930000000.0,
-    232630510000000.0,
-    1628413600000000.0,
-    1.1398895e16,
-    7.979226e16,
-    5.5854586e17,
-    3.909821e18,
-    2.7368747e19,
-    1.9158123e20,
-    1.3410687e21,
-    9.3874804e21,
+const WEIERSTRASS_BK_PI: [f32; 27] = [
+    3.141592653589793,
+    21.991148575128552,
+    153.93804002589985,
+    1077.5662801812991,
+    7542.9639612690935,
+    52800.74772888365,
+    369605.2341021856,
+    2587236.638715299,
+    18110656.471007094,
+    126774604.72182761,
+    887422201.6368667,
+    6211955034.4669485,
+    43483685555.42791,
+    304385802029.588,
+    2130700708454.8955,
+    14914904330865.738,
+    104404328745263.84,
+    730830301216846.9,
+    5115812202765708.0,
+    3.5810684791041424e+16,
+    2.5067477782932672e+17,
+    1.754723570468993e+18,
+    1.2283064930451098e+19,
+    8.598145451315769e+19,
+    6.018701847336965e+20,
+    4.213091575879214e+21,
+    2.9491639460358173e+22,
 ];
 
 pub fn weierstrass(x: Vec4) -> Vec4 {
-    let t0 = WEIERSTRASS_AK[0] * ((WEIERSTRASS_BK[0] * PI * x).cos());
-    let t1 = WEIERSTRASS_AK[1] * ((WEIERSTRASS_BK[1] * PI * x).cos());
-    let t2 = WEIERSTRASS_AK[2] * ((WEIERSTRASS_BK[2] * PI * x).cos());
-    let t3 = WEIERSTRASS_AK[3] * ((WEIERSTRASS_BK[3] * PI * x).cos());
-    let t4 = WEIERSTRASS_AK[4] * ((WEIERSTRASS_BK[4] * PI * x).cos());
-    let t5 = WEIERSTRASS_AK[5] * ((WEIERSTRASS_BK[5] * PI * x).cos());
-    let t6 = WEIERSTRASS_AK[6] * ((WEIERSTRASS_BK[6] * PI * x).cos());
-    let t7 = WEIERSTRASS_AK[7] * ((WEIERSTRASS_BK[7] * PI * x).cos());
-    let t8 = WEIERSTRASS_AK[8] * ((WEIERSTRASS_BK[8] * PI * x).cos());
-    let t9 = WEIERSTRASS_AK[9] * ((WEIERSTRASS_BK[9] * PI * x).cos());
-    let t10 = WEIERSTRASS_AK[10] * ((WEIERSTRASS_BK[10] * PI * x).cos());
-    let t11 = WEIERSTRASS_AK[11] * ((WEIERSTRASS_BK[11] * PI * x).cos());
-    let t12 = WEIERSTRASS_AK[12] * ((WEIERSTRASS_BK[12] * PI * x).cos());
-    let t13 = WEIERSTRASS_AK[13] * ((WEIERSTRASS_BK[13] * PI * x).cos());
-    let t14 = WEIERSTRASS_AK[14] * ((WEIERSTRASS_BK[14] * PI * x).cos());
-    let t15 = WEIERSTRASS_AK[15] * ((WEIERSTRASS_BK[15] * PI * x).cos());
-    let t16 = WEIERSTRASS_AK[16] * ((WEIERSTRASS_BK[16] * PI * x).cos());
-    let t17 = WEIERSTRASS_AK[17] * ((WEIERSTRASS_BK[17] * PI * x).cos());
-    let t18 = WEIERSTRASS_AK[18] * ((WEIERSTRASS_BK[18] * PI * x).cos());
-    let t19 = WEIERSTRASS_AK[19] * ((WEIERSTRASS_BK[19] * PI * x).cos());
-    let t20 = WEIERSTRASS_AK[20] * ((WEIERSTRASS_BK[20] * PI * x).cos());
-    let t21 = WEIERSTRASS_AK[21] * ((WEIERSTRASS_BK[21] * PI * x).cos());
-    let t22 = WEIERSTRASS_AK[22] * ((WEIERSTRASS_BK[22] * PI * x).cos());
-    let t23 = WEIERSTRASS_AK[23] * ((WEIERSTRASS_BK[23] * PI * x).cos());
-    let t24 = WEIERSTRASS_AK[24] * ((WEIERSTRASS_BK[24] * PI * x).cos());
-    let t25 = WEIERSTRASS_AK[25] * ((WEIERSTRASS_BK[25] * PI * x).cos());
-    let t26 = WEIERSTRASS_AK[26] * ((WEIERSTRASS_BK[26] * PI * x).cos());
-    t0 + t1
-        + t2
-        + t3
-        + t4
-        + t5
-        + t6
-        + t7
-        + t8
-        + t9
-        + t10
-        + t11
-        + t12
-        + t13
-        + t14
-        + t15
-        + t16
-        + t17
-        + t18
-        + t19
-        + t20
-        + t21
-        + t22
-        + t23
-        + t24
-        + t25
-        + t26
+    let mut total = Vec4::ZERO;
+    for k in 0..=26 {
+        let ak = WEIERSTRASS_AK[k];
+        let bk_pi = WEIERSTRASS_BK_PI[k];
+        let term = ak * (bk_pi * x).cos();
+        total += term;
+    }
+    total
 }
 
 pub const SHIFTED_WEIERSTRASS_BOUNDS: [[f32; 2]; 2] = [[-10.0, 10.0], [-10.0, 10.0]];
