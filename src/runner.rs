@@ -12,7 +12,7 @@ use crate::{
 
 pub fn run_multiple_optimizaions<T>(
     optimizer: &T,
-    functions: &[TestFunction],
+    functions: &BTreeMap<String, TestFunction>,
     dimension_count: usize,
     maxiter: u64,
     seed_count: u64,
@@ -32,11 +32,10 @@ where
     .progress_chars("##-");
     let pb = m.add(ProgressBar::new(functions.len() as u64));
     pb.set_style(sty.clone());
-    for function in functions {
+    for (function_name, function) in functions {
         let _seed_pb = ProgressBar::new(seed_count);
         let seed_pb = m.add(_seed_pb);
         seed_pb.set_style(sty.clone());
-        let func_name = function.name.to_string();
         let func = &broadcast_simd(&function.func);
         let bounds = &function.bounds.repeat(dimension_count / 2);
         let mut total_nfev = 0;
@@ -65,9 +64,9 @@ where
             }
         }
         if total_nfev != u64::MAX {
-            total_result.insert(func_name, total_nfev as f32 / seed_count as f32);
+            total_result.insert(function_name.clone(), total_nfev as f32 / seed_count as f32);
         } else {
-            total_result.insert(func_name, f32::INFINITY);
+            total_result.insert(function_name.clone(), f32::INFINITY);
         }
         if use_progress_bar {
             pb.inc(1);

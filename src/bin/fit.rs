@@ -13,7 +13,7 @@ use optimizers::{
 
 fn main() {
     let ansr_params = ANSR_PARAMS.clone();
-    let functions = TEST_FUNCTIONS;
+    let functions = &TEST_FUNCTIONS;
     let dimension_count = 16;
     let maxiter = 300_000;
     let seed_count = 10;
@@ -32,7 +32,7 @@ fn main() {
             let optimizer = new_ansr(params);
             let mean = run_multiple_optimizaions(
                 &optimizer,
-                &functions,
+                functions,
                 dimension_count,
                 maxiter,
                 seed_count,

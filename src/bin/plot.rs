@@ -9,7 +9,7 @@ use optimizers::{
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let optimizer = &DEFAULT_ANSR;
-    let function = &TEST_FUNCTIONS[4];
+    let function = &TEST_FUNCTIONS["megacity"];
     let dimension_count = 16;
     let maxiter = 100_000;
     let stop_residual = 0.01;

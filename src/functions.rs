@@ -1,11 +1,11 @@
-use std::f32::consts::PI;
+use std::{collections::BTreeMap, f32::consts::PI};
 
 use glam::Vec4;
+use once_cell::sync::Lazy;
 
 use crate::utils::Vec4Ext;
 
 pub struct TestFunction {
-    pub name: &'static str,
     pub func: fn(Vec4, Vec4) -> Vec4,
     pub bounds: [[f32; 2]; 2],
 }
@@ -96,33 +96,45 @@ pub fn megacity(x: Vec4, y: Vec4) -> Vec4 {
     scale(result, -12.0_f32, 2.0_f32, 0.0_f32, 1.0_f32)
 }
 
-pub const TEST_FUNCTIONS: [TestFunction; 5] = [
-    TestFunction {
-        name: "shifted_sphere",
-        func: shifted_sphere,
-        bounds: SHIFTED_SPHERE_BOUNDS,
-    },
-    TestFunction {
-        name: "shifted_weierstrass",
-        func: shifted_weierstrass,
-        bounds: SHIFTED_WEIERSTRASS_BOUNDS,
-    },
-    TestFunction {
-        name: "hilly",
-        func: hilly,
-        bounds: HILLY_BOUNDS,
-    },
-    TestFunction {
-        name: "forest",
-        func: forest,
-        bounds: FOREST_BOUNDS,
-    },
-    TestFunction {
-        name: "megacity",
-        func: megacity,
-        bounds: MEGACITY_BOUNDS,
-    },
-];
+pub static TEST_FUNCTIONS: Lazy<BTreeMap<String, TestFunction>> = Lazy::new(|| {
+    let mut m = BTreeMap::new();
+    m.insert(
+        "shifted_sphere".to_string(),
+        TestFunction {
+            func: shifted_sphere,
+            bounds: SHIFTED_SPHERE_BOUNDS,
+        },
+    );
+    m.insert(
+        "shifted_weierstrass".to_string(),
+        TestFunction {
+            func: shifted_weierstrass,
+            bounds: SHIFTED_WEIERSTRASS_BOUNDS,
+        },
+    );
+    m.insert(
+        "hilly".to_string(),
+        TestFunction {
+            func: hilly,
+            bounds: HILLY_BOUNDS,
+        },
+    );
+    m.insert(
+        "forest".to_string(),
+        TestFunction {
+            func: forest,
+            bounds: FOREST_BOUNDS,
+        },
+    );
+    m.insert(
+        "megacity".to_string(),
+        TestFunction {
+            func: megacity,
+            bounds: MEGACITY_BOUNDS,
+        },
+    );
+    m
+});
 
 #[cfg(test)]
 mod tests {
