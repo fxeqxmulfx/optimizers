@@ -120,7 +120,7 @@ pub fn broadcast_simd<F>(func: F) -> impl Fn(&[Vec4]) -> f32 + Sync
 where
     F: Fn(Vec4, Vec4) -> Vec4 + Sync,
 {
-    move |x: &[Vec4]| {
+    move |x: &[Vec4]| -> f32 {
         x.chunks_exact(2)
             .map(|pair| func(pair[0], pair[1]))
             .sum::<Vec4>()
