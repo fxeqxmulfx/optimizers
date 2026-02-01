@@ -28,7 +28,7 @@ pub fn shifted_sphere(x: Vec4, y: Vec4) -> Vec4 {
 
 fn _weierstrass(x: Vec4, a: Vec4, b: Vec4) -> Vec4 {
     let mut total = Vec4::ZERO;
-    for k in 0..=45 {
+    for k in 0..=12 {
         let kf = k as f32;
         let ak = a.powf(kf);
         let bk = b.powf(kf);
