@@ -1,14 +1,14 @@
-use std::collections::{BTreeMap};
+use std::collections::BTreeMap;
 
 use once_cell::sync::Lazy;
 
 use crate::algorithms::{ansr::ANSR, zero_gradient::ZeroGradient};
 
 pub static DEFAULT_ANSR: ANSR = ANSR {
-    popsize: 8,
+    popsize: 4,
     restart_tolerance: 0.01,
     sigma: 0.05,
-    self_instead_neighbour: 0.9,
+    self_instead_neighbour: 0.85,
 };
 
 pub static ANSR_PARAMS: Lazy<BTreeMap<String, Vec<f32>>> = Lazy::new(|| {
