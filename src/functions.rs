@@ -10,7 +10,6 @@ pub struct TestFunction {
     pub bounds: [[f32; 2]; 2],
 }
 
-#[inline]
 fn scale(v: Vec4, in_min: f32, in_max: f32, out_min: f32, out_max: f32) -> Vec4 {
     let in_range = in_max - in_min;
     let out_range = out_max - out_min;
@@ -30,14 +29,13 @@ static WEIERSTRASS_AK: Lazy<Vec<f32>> = Lazy::new(|| (0..=12).map(|k| 0.5_f32.po
 static WEIERSTRASS_BK: Lazy<Vec<f32>> = Lazy::new(|| (0..=12).map(|k| 7.0_f32.powi(k)).collect());
 
 fn weierstrass(x: Vec4) -> Vec4 {
-    let mut total = Vec4::ZERO;
-    for k in 0..=12 {
-        let ak = WEIERSTRASS_AK[k];
-        let bk = WEIERSTRASS_BK[k];
-        let term = ak * (bk * PI * x).cos();
-        total += term;
-    }
-    total
+    (0..=12)
+        .map(|k| {
+            let ak = WEIERSTRASS_AK[k];
+            let bk = WEIERSTRASS_BK[k];
+            ak * (bk * PI * x).cos()
+        })
+        .sum()
 }
 
 pub const SHIFTED_WEIERSTRASS_BOUNDS: [[f32; 2]; 2] = [[-10.0, 10.0], [-10.0, 10.0]];
