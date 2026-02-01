@@ -25,34 +25,34 @@ pub fn shifted_sphere(x: Vec4, y: Vec4) -> Vec4 {
     scale(result, 0.0, 345.402914946, 0.0, 1.0)
 }
 
-const WEIERSTRASS_AK: [f32; 27] = [
-    1.0,
-    0.5,
-    0.25,
-    0.125,
-    0.0625,
-    0.03125,
-    0.015625,
-    0.0078125,
-    0.00390625,
-    0.001953125,
-    0.0009765625,
-    0.00048828125,
-    0.00024414063,
-    0.00012207031,
-    6.1035156e-5,
-    3.0517578e-5,
-    1.5258789e-5,
-    7.6293945e-6,
-    3.8146973e-6,
-    1.9073486e-6,
-    9.536743e-7,
-    4.7683716e-7,
-    2.3841858e-7,
-    1.1920929e-7,
-    5.9604645e-8,
-    2.9802322e-8,
-    1.4901161e-8,
+const WEIERSTRASS_AK: [Vec4; 27] = [
+    Vec4::splat(1.0),
+    Vec4::splat(0.5),
+    Vec4::splat(0.25),
+    Vec4::splat(0.125),
+    Vec4::splat(0.0625),
+    Vec4::splat(0.03125),
+    Vec4::splat(0.015625),
+    Vec4::splat(0.0078125),
+    Vec4::splat(0.00390625),
+    Vec4::splat(0.001953125),
+    Vec4::splat(0.0009765625),
+    Vec4::splat(0.00048828125),
+    Vec4::splat(0.00024414063),
+    Vec4::splat(0.00012207031),
+    Vec4::splat(6.1035156e-5),
+    Vec4::splat(3.0517578e-5),
+    Vec4::splat(1.5258789e-5),
+    Vec4::splat(7.6293945e-6),
+    Vec4::splat(3.8146973e-6),
+    Vec4::splat(1.9073486e-6),
+    Vec4::splat(9.536743e-7),
+    Vec4::splat(4.7683716e-7),
+    Vec4::splat(2.3841858e-7),
+    Vec4::splat(1.1920929e-7),
+    Vec4::splat(5.9604645e-8),
+    Vec4::splat(2.9802322e-8),
+    Vec4::splat(1.4901161e-8),
 ];
 
 const WEIERSTRASS_BK_PI: [f32; 27] = [
@@ -88,7 +88,9 @@ const WEIERSTRASS_BK_PI: [f32; 27] = [
 pub fn weierstrass(x: Vec4) -> Vec4 {
     let mut total = Vec4::ZERO;
     for k in 0..=26 {
-        total += WEIERSTRASS_AK[k] * (WEIERSTRASS_BK_PI[k] * x).cos();
+        total = (WEIERSTRASS_BK_PI[k] * x)
+            .cos()
+            .mul_add(WEIERSTRASS_AK[k], total);
     }
     total
 }
