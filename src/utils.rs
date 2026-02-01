@@ -108,9 +108,8 @@ where
     F: Fn(f32, f32) -> f32 + Sync,
 {
     move |x: &[f32]| -> f32 {
-        let x_len = x.len();
         let sum: f32 = x.chunks_exact(2).map(|pair| func(pair[0], pair[1])).sum();
-        (sum / x_len as f32) * 2.0
+        sum * 2.0 / x.len() as f32
     }
 }
 
@@ -119,12 +118,11 @@ where
     F: Fn(Vec4, Vec4) -> Vec4 + Sync,
 {
     move |x: &[Vec4]| {
-        let x_len = x.len();
         let sum: f32 = x
             .chunks_exact(2)
             .map(|pair| func(pair[0], pair[1]).to_array().iter().sum::<f32>())
             .sum();
-        (sum / (x_len * 4) as f32) * 2.0
+        sum / (x.len() * 2) as f32
     }
 }
 
@@ -133,7 +131,6 @@ where
     F: Fn(Vec4, Vec4) -> Vec4 + Sync,
 {
     move |x: &[f32]| -> f32 {
-        let x_len = x.len();
         let sum: f32 = x
             .chunks_exact(2)
             .map(|pair| {
@@ -143,7 +140,7 @@ where
                     .sum::<f32>()
             })
             .sum();
-        (sum / (x_len * 4) as f32) * 2.0
+        sum / (x.len() * 2) as f32
     }
 }
 
