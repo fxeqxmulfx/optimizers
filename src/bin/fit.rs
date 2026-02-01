@@ -15,7 +15,7 @@ fn main() {
     let ansr_params = ANSR_PARAMS.clone();
     let functions = TEST_FUNCTIONS;
     let dimension_count = 16;
-    let maxiter = 100_000;
+    let maxiter = 300_000;
     let seed_count = 10;
     let stop_residual = 0.01;
     let all_combinations = all_combinations(&ansr_params);
@@ -26,22 +26,39 @@ fn main() {
     .progress_chars("##-");
     let pb = ProgressBar::new(all_combinations.len() as u64);
     pb.set_style(sty.clone());
+    let single_test_function = &functions[1..2];
+    let maxiter_single_test_function = 40_000.0;
     let mut results: Vec<(i64, &BTreeMap<String, f32>)> = all_combinations
         .par_iter()
         .map(|params| {
             let optimizer = new_ansr(params);
-            let mean = run_multiple_optimizaions(
+            let mean_single_test_function = run_multiple_optimizaions(
                 &optimizer,
-                &functions,
+                single_test_function,
                 dimension_count,
-                maxiter,
+                maxiter_single_test_function as u64,
                 seed_count,
                 stop_residual,
                 false,
                 false,
             )["mean"];
-            pb.inc(1);
-            (f32_to_i64(mean), params)
+            if mean_single_test_function > maxiter_single_test_function {
+                pb.inc(1);
+                (i64::MAX, params)
+            } else {
+                let mean = run_multiple_optimizaions(
+                    &optimizer,
+                    &functions,
+                    dimension_count,
+                    maxiter,
+                    seed_count,
+                    stop_residual,
+                    false,
+                    false,
+                )["mean"];
+                pb.inc(1);
+                (f32_to_i64(mean), params)
+            }
         })
         .collect();
     results.sort_by_key(|&(mean, _)| mean);
