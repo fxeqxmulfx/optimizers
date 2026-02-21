@@ -15,10 +15,10 @@
 The table below lists the algorithms sorted by the *average* number of function evaluations on 16‑dimensional test problems.  
 Only runs that achieved at least **99 % of the infimum** are shown.
 
-| №   | algorithm     | params                                                                         | mean_16D  | shifted_sphere_16D | shifted_weierstrass_16D | hilly_16D | forest_16D | megacity_16D |
-| --- | ------------- | ------------------------------------------------------------------------------ | --------- | ------------------ | ----------------------- | --------- | ---------- | ------------ |
-| 1   | ansr          | popsize: 4, restart_tolerance: 0.01, sigma: 0.05, self_instead_neighbour: 0.85 | 54789.406 | 547.98             | 24493.82                | 47292.88  | 27341.62   | 174270.72    |
-| inf | zero_gradient | init_jump: 0.1                                                                 | inf       | 384.195            | inf                     | inf       | inf        | inf          |
+| №   | algorithm     | params                                                                        | mean_16D  | shifted_sphere_16D | shifted_weierstrass_16D | hilly_16D | forest_16D | megacity_16D |
+| --- | ------------- | ----------------------------------------------------------------------------- | --------- | ------------------ | ----------------------- | --------- | ---------- | ------------ |
+| 1   | ansr          | popsize: 4, restart_tolerance: 0.01, sigma: 0.05, self_instead_neighbour: 0.9 | 51726.992 | 624.7              | 24111.44                | 52667.4   | 21473      | 159758.42    |
+| inf | zero_gradient | init_jump: 0.1                                                                | inf       | 384.195            | inf                     | inf       | inf        | inf          |
 
 > **NOTE** – The “inf” rows indicate that the algorithm never reached the 99 % threshold for any of the tested functions.
 

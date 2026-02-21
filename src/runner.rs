@@ -30,13 +30,22 @@ where
     )
     .unwrap()
     .progress_chars("##-");
-    let pb = m.add(ProgressBar::new(functions.len() as u64));
-    pb.set_style(sty.clone());
+    let optional_pb = if use_progress_bar {
+        let pb = m.add(ProgressBar::new(functions.len() as u64));
+        pb.set_style(sty.clone());
+        Some(pb)
+    } else {
+        None
+    };
     for (function_name, function) in functions {
-        let _seed_pb = ProgressBar::new(seed_count);
-        let seed_pb = m.add(_seed_pb);
-        seed_pb.set_style(sty.clone());
-        seed_pb.set_message(function_name.clone());
+        let optional_seed_pb = if use_progress_bar {
+            let seed_pb = m.add(ProgressBar::new(seed_count));
+            seed_pb.set_style(sty.clone());
+            seed_pb.set_message(function_name.clone());
+            Some(seed_pb)
+        } else {
+            None
+        };
         let func = &broadcast_simd(&function.func);
         let bounds = &function.bounds.repeat(dimension_count / 2);
         let mut total_nfev = 0;
@@ -45,7 +54,7 @@ where
             let result =
                 optimizer.find_infimum(func, bounds, maxiter, seed, false, &early_stop_callback);
 
-            if use_progress_bar {
+            if let Some(seed_pb) = &optional_seed_pb {
                 seed_pb.inc(1);
             }
             result
@@ -55,7 +64,9 @@ where
         } else {
             (0..seed_count).into_iter().map(compute).collect()
         };
-        seed_pb.finish_and_clear();
+        if let Some(seed_pb) = &optional_seed_pb {
+            seed_pb.finish_and_clear();
+        }
         for result in results {
             if result.f_x <= stop_residual {
                 total_nfev += result.nfev;
@@ -69,7 +80,7 @@ where
         } else {
             total_result.insert(function_name.clone(), f32::INFINITY);
         }
-        if use_progress_bar {
+        if let Some(pb) = &optional_pb {
             pb.inc(1);
         }
     }

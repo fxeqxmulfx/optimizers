@@ -1,5 +1,7 @@
-use std::collections::BTreeMap;
+use core::f32;
+use std::{collections::BTreeMap, sync::atomic::Ordering};
 
+use atomic_float::AtomicF32;
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 
@@ -14,25 +16,26 @@ use optimizers::{
 fn main() {
     let ansr_params = ANSR_PARAMS.clone();
     let functions = &TEST_FUNCTIONS;
-    let dimension_count = 8;
+    let dimension_count = 16;
     let maxiter = 300_000;
     let seed_count = 10;
     let stop_residual = 0.01;
     let all_combinations = all_combinations(&ansr_params);
     let sty = ProgressStyle::with_template(
-        "[{elapsed_precise}|{eta_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}",
+        "[{elapsed_precise}|{eta_precise}|mean={msg}] {bar:40.cyan/blue} {pos:>7}/{len:7}",
     )
     .unwrap()
     .progress_chars("##-");
     let pb = ProgressBar::new(all_combinations.len() as u64);
     pb.set_style(sty.clone());
+    let global_mean = AtomicF32::new(f32::INFINITY);
     let mut results: Vec<(i64, &BTreeMap<String, f32>)> = all_combinations
         .par_iter()
         .map(|params| {
             let optimizer = new_ansr(params);
             let mean = run_multiple_optimizaions(
                 &optimizer,
-                functions,
+                &functions,
                 dimension_count,
                 maxiter,
                 seed_count,
@@ -41,6 +44,10 @@ fn main() {
                 false,
             )["mean"];
             pb.inc(1);
+            pb.set_message(format!(
+                "{}",
+                global_mean.fetch_min(mean, Ordering::Relaxed)
+            ));
             (f32_to_i64(mean), params)
         })
         .collect();

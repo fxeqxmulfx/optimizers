@@ -5,6 +5,7 @@ use once_cell::sync::Lazy;
 
 use crate::utils::Vec4Ext;
 
+#[derive(Clone)]
 pub struct TestFunction {
     pub func: fn(Vec4, Vec4) -> Vec4,
     pub bounds: [[f32; 2]; 2],

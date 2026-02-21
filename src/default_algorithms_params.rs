@@ -8,19 +8,22 @@ pub static DEFAULT_ANSR: ANSR = ANSR {
     popsize: 4,
     restart_tolerance: 0.01,
     sigma: 0.05,
-    self_instead_neighbour: 0.85,
+    self_instead_neighbour: 0.9,
 };
 
 pub static ANSR_PARAMS: Lazy<BTreeMap<String, Vec<f32>>> = Lazy::new(|| {
     let mut m = BTreeMap::new();
-    m.insert("popsize".to_string(), vec![4., 8., 16., 24., 32., 40., 48.]);
+    m.insert(
+        "popsize".to_string(),
+        vec![2., 4., 8., 12., 16., 20., 24., 28., 32.],
+    );
     m.insert(
         "restart_tolerance".to_string(),
-        vec![1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8],
+        vec![1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7],
     );
     m.insert(
         "sigma".to_string(),
-        vec![0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5],
+        vec![0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3],
     );
     m.insert(
         "self_instead_neighbour".to_string(),

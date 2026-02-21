@@ -118,22 +118,26 @@ impl Optimizer for ANSR {
                                 best_residuals[rhs] = f32::INFINITY;
                                 for d in 0..params {
                                     best_positions[rhs][d] = random.sample(&mut rng);
+                                    current_positions[rhs][d] = random.sample(&mut rng);
                                 }
                             } else {
                                 best_residuals[lhs] = f32::INFINITY;
                                 for d in 0..params {
                                     best_positions[lhs][d] = random.sample(&mut rng);
+                                    current_positions[lhs][d] = random.sample(&mut rng);
                                 }
                             }
                         } else if lhs != ind {
                             best_residuals[lhs] = f32::INFINITY;
                             for d in 0..params {
                                 best_positions[lhs][d] = random.sample(&mut rng);
+                                current_positions[lhs][d] = random.sample(&mut rng);
                             }
                         } else {
                             best_residuals[rhs] = f32::INFINITY;
                             for d in 0..params {
                                 best_positions[rhs][d] = random.sample(&mut rng);
+                                current_positions[rhs][d] = random.sample(&mut rng);
                             }
                         }
                     }
