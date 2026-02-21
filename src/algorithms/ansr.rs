@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, mem::swap};
 
 use glam::Vec4;
 use rand::{SeedableRng, rngs::StdRng};
@@ -105,13 +105,16 @@ impl Optimizer for ANSR {
             }
             for lhs in 0..popsize {
                 for rhs in (lhs + 1)..popsize {
-                    if best_residuals[lhs] != f32::INFINITY
-                        && best_residuals[rhs] != f32::INFINITY
-                        && f32::max(best_residuals[lhs].abs(), best_residuals[rhs].abs()) != 0.0
-                        && f32::abs(
-                            (best_residuals[lhs] - best_residuals[rhs])
-                                / f32::max(best_residuals[lhs].abs(), best_residuals[rhs].abs()),
-                        ) < restart_tolerance
+                    let mut min_residual = best_residuals[lhs];
+                    let mut max_residual = best_residuals[rhs];
+                    if min_residual > max_residual {
+                        swap(&mut min_residual, &mut max_residual);
+                    }
+                    if min_residual != f32::INFINITY
+                        && max_residual != f32::INFINITY
+                        && max_residual != 0.0
+                        && f32::abs((max_residual - min_residual) / max_residual)
+                            < restart_tolerance
                     {
                         if lhs != ind && rhs != ind {
                             if best_residuals[lhs] < best_residuals[rhs] {
