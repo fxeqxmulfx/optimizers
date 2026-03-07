@@ -1,8 +1,9 @@
 use std::{collections::BTreeMap, mem::swap};
 
-use simd_vector::Vec8;
-use rand::{SeedableRng, rngs::StdRng};
+use rand::SeedableRng;
 use rand_distr::{Distribution, Normal, Uniform};
+use rand_pcg::Pcg64Mcg;
+use simd_vector::Vec8;
 
 use crate::{
     early_stop_callback::EarlyStopCallback,
@@ -49,7 +50,7 @@ impl Optimizer for ANSR {
             range_max[i] = bounds[i][1];
         }
         let mut current_positions: Vec<Vec<f32>> = vec![vec![0.0; params]; popsize];
-        let mut rng: StdRng = SeedableRng::seed_from_u64(seed);
+        let mut rng: Pcg64Mcg = SeedableRng::seed_from_u64(seed);
         let random = Uniform::new_inclusive(0.0, 1.0).unwrap();
         for p in 0..popsize {
             for d in 0..params {
