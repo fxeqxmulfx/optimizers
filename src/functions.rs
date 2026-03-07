@@ -148,7 +148,43 @@ pub fn megacity(x: Vec4, y: Vec4) -> Vec4 {
     scale(result, -12.0_f32, 2.0_f32, 0.0_f32, 1.0_f32)
 }
 
-pub static TEST_FUNCTIONS: Lazy<BTreeMap<String, TestFunction>> = Lazy::new(|| {
+pub const SPHERE_BOUNDS: [[f32; 2]; 2] = [[-5.0, 5.0], [-5.0, 5.0]];
+
+pub fn sphere(x: Vec4, y: Vec4) -> Vec4 {
+    let result = x.square() + y.square();
+    scale(result, 0.0, 50.0, 0.0, 1.0)
+}
+
+pub const ELLIPSOID_BOUNDS: [[f32; 2]; 2] = [[-5.0, 5.0], [-5.0, 5.0]];
+
+pub fn ellipsoid(x: Vec4, y: Vec4) -> Vec4 {
+    let result = x.square() + 1_000_000.0 * y.square();
+    scale(result, 0.0, 25_000_025.0, 0.0, 1.0)
+}
+
+pub const ROSENBROCK_BOUNDS: [[f32; 2]; 2] = [[-5.0, 5.0], [-5.0, 5.0]];
+
+pub fn rosenbrock(x: Vec4, y: Vec4) -> Vec4 {
+    let result = 100.0 * (x.square() - y).square() + (x - 1.0).square();
+    scale(result, 0.0, 90_036.0, 0.0, 1.0)
+}
+
+pub const DISCUS_BOUNDS: [[f32; 2]; 2] = [[-5.0, 5.0], [-5.0, 5.0]];
+
+pub fn discus(x: Vec4, y: Vec4) -> Vec4 {
+    let result = 1_000_000.0 * x.square() + y.square();
+    scale(result, 0.0, 25_000_025.0, 0.0, 1.0)
+}
+
+pub const DIFFERENT_POWERS_BOUNDS: [[f32; 2]; 2] = [[-5.0, 5.0], [-5.0, 5.0]];
+
+pub fn different_powers(x: Vec4, y: Vec4) -> Vec4 {
+    let y_sq = y.square();
+    let result = x.square() + (y_sq * y_sq * y_sq);
+    scale(result, 0.0, 15_650.0, 0.0, 1.0)
+}
+
+pub static MAIN_TEST_FUNCTIONS: Lazy<BTreeMap<String, TestFunction>> = Lazy::new(|| {
     let mut m = BTreeMap::new();
     m.insert(
         "shifted_sphere".to_string(),
@@ -183,6 +219,46 @@ pub static TEST_FUNCTIONS: Lazy<BTreeMap<String, TestFunction>> = Lazy::new(|| {
         TestFunction {
             func: megacity,
             bounds: MEGACITY_BOUNDS,
+        },
+    );
+    m
+});
+
+pub static LMMAES_TEST_FUNCTIONS: Lazy<BTreeMap<String, TestFunction>> = Lazy::new(|| {
+    let mut m = BTreeMap::new();
+    m.insert(
+        "sphere".to_string(),
+        TestFunction {
+            func: sphere,
+            bounds: SPHERE_BOUNDS,
+        },
+    );
+    m.insert(
+        "ellipsoid".to_string(),
+        TestFunction {
+            func: ellipsoid,
+            bounds: ELLIPSOID_BOUNDS,
+        },
+    );
+    m.insert(
+        "rosenbrock".to_string(),
+        TestFunction {
+            func: rosenbrock,
+            bounds: ROSENBROCK_BOUNDS,
+        },
+    );
+    m.insert(
+        "discus".to_string(),
+        TestFunction {
+            func: discus,
+            bounds: DISCUS_BOUNDS,
+        },
+    );
+    m.insert(
+        "different_powers".to_string(),
+        TestFunction {
+            func: different_powers,
+            bounds: DIFFERENT_POWERS_BOUNDS,
         },
     );
     m
@@ -232,7 +308,27 @@ mod tests {
         )
         .x;
         assert!(m_min.abs() < 1e-3, "Megacity min not 0");
-        let m_max = megacity(Vec4::splat(-9.5), Vec4::splat(-7.5)).x;
+        let m_max = megacity(Vec4::splat(-9.5), Vec4::splat(-7.5))[0];
         assert!((m_max - 1.0).abs() < 1e-3, "Megacity max not 1");
+        let s_min = sphere(Vec4::splat(0.0), Vec4::splat(0.0)).x;
+        assert!(s_min.abs() < 1e-3, "Sphere min not 0");
+        let s_max = sphere(Vec4::splat(5.0), Vec4::splat(5.0)).x;
+        assert!((s_max - 1.0).abs() < 1e-3, "Sphere max not 1");
+        let e_min = ellipsoid(Vec4::splat(0.0), Vec4::splat(0.0)).x;
+        assert!(e_min.abs() < 1e-3, "Ellipsoid min not 0");
+        let e_max = ellipsoid(Vec4::splat(5.0), Vec4::splat(5.0)).x;
+        assert!((e_max - 1.0).abs() < 1e-3, "Ellipsoid max not 1");
+        let r_min = rosenbrock(Vec4::splat(1.0), Vec4::splat(1.0)).x;
+        assert!(r_min.abs() < 1e-3, "Rosenbrock min not 0");
+        let r_max = rosenbrock(Vec4::splat(-5.0), Vec4::splat(-5.0)).x;
+        assert!((r_max - 1.0).abs() < 1e-3, "Rosenbrock max not 1");
+        let d_min = discus(Vec4::splat(0.0), Vec4::splat(0.0)).x;
+        assert!(d_min.abs() < 1e-3, "Discus min not 0");
+        let d_max = discus(Vec4::splat(5.0), Vec4::splat(5.0)).x;
+        assert!((d_max - 1.0).abs() < 1e-3, "Discus max not 1");
+        let dp_min = different_powers(Vec4::splat(0.0), Vec4::splat(0.0)).x;
+        assert!(dp_min.abs() < 1e-3, "Different Powers min not 0");
+        let dp_max = different_powers(Vec4::splat(5.0), Vec4::splat(5.0)).x;
+        assert!((dp_max - 1.0).abs() < 1e-3, "Different Powers max not 1");
     }
 }

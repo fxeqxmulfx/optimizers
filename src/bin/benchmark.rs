@@ -1,11 +1,11 @@
 use optimizers::{
-    default_algorithms_params::DEFAULT_ANSR, functions::TEST_FUNCTIONS,
+    default_algorithms_params::DEFAULT_ANSR, functions::MAIN_TEST_FUNCTIONS,
     runner::run_multiple_optimizaions,
 };
 
 fn main() {
     let optimizer = &DEFAULT_ANSR;
-    let functions = &TEST_FUNCTIONS;
+    let functions = &MAIN_TEST_FUNCTIONS;
     let dimension_count = 16;
     let maxiter = 1_000_000;
     let seed_count = 200;

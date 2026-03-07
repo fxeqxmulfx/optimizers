@@ -1,7 +1,7 @@
 use optimizers::{
     default_algorithms_params::DEFAULT_ANSR,
     early_stop_callback::EarlyStopCallback,
-    functions::TEST_FUNCTIONS,
+    functions::MAIN_TEST_FUNCTIONS,
     optimizer::Optimizer,
     plot::save_video_h264,
     utils::{broadcast_scalar, broadcast_simd, format_best_f_x_history, format_x_history},
@@ -9,7 +9,7 @@ use optimizers::{
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let optimizer = &DEFAULT_ANSR;
-    let function = &TEST_FUNCTIONS["megacity"];
+    let function = &MAIN_TEST_FUNCTIONS["megacity"];
     let dimension_count = 16;
     let maxiter = 100_000;
     let stop_residual = 0.01;
