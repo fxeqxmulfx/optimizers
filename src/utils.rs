@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use glam::Vec4;
+use simd_vector::Vec4;
 
 pub fn clamp_to_unit_cube(value: f32) -> f32 {
     if value > 1.0 {
@@ -18,37 +18,37 @@ pub fn fit_in_bounds_simd(values: &[f32], range_min: &[f32], range_max: &[f32]) 
     let mut out = Vec::with_capacity(groups * 2);
     for g in 0..groups {
         let base = g * 8;
-        let vals_lo = Vec4::from_array([
+        let vals_lo = Vec4::from([
             values[base],
             values[base + 1],
             values[base + 2],
             values[base + 3],
         ]);
-        let vals_hi = Vec4::from_array([
+        let vals_hi = Vec4::from([
             values[base + 4],
             values[base + 5],
             values[base + 6],
             values[base + 7],
         ]);
-        let mins_lo = Vec4::from_array([
+        let mins_lo = Vec4::from([
             range_min[base],
             range_min[base + 1],
             range_min[base + 2],
             range_min[base + 3],
         ]);
-        let mins_hi = Vec4::from_array([
+        let mins_hi = Vec4::from([
             range_min[base + 4],
             range_min[base + 5],
             range_min[base + 6],
             range_min[base + 7],
         ]);
-        let maxs_lo = Vec4::from_array([
+        let maxs_lo = Vec4::from([
             range_max[base],
             range_max[base + 1],
             range_max[base + 2],
             range_max[base + 3],
         ]);
-        let maxs_hi = Vec4::from_array([
+        let maxs_hi = Vec4::from([
             range_max[base + 4],
             range_max[base + 5],
             range_max[base + 6],
@@ -56,8 +56,8 @@ pub fn fit_in_bounds_simd(values: &[f32], range_min: &[f32], range_max: &[f32]) 
         ]);
         let f_lo = mins_lo + vals_lo * (maxs_lo - mins_lo);
         let f_hi = mins_hi + vals_hi * (maxs_hi - mins_hi);
-        let evens = Vec4::new(f_lo.x, f_lo.z, f_hi.x, f_hi.z);
-        let odds = Vec4::new(f_lo.y, f_lo.w, f_hi.y, f_hi.w);
+        let evens = Vec4([f_lo[0], f_lo[2], f_hi[0], f_hi[2]]);
+        let odds = Vec4([f_lo[1], f_lo[3], f_hi[1], f_hi[3]]);
         out.push(evens);
         out.push(odds);
     }
@@ -237,8 +237,8 @@ mod tests {
     #[test]
     fn test_broadcast_simd_add() {
         let f = broadcast_simd(|a, b| a + b);
-        let v1 = Vec4::new(1.0, 2.0, 3.0, 4.0);
-        let v2 = Vec4::new(4.0, 3.0, 2.0, 1.0);
+        let v1 = Vec4([1.0, 2.0, 3.0, 4.0]);
+        let v2 = Vec4([4.0, 3.0, 2.0, 1.0]);
         let res = f(&[v1, v2]);
         assert!(almost_equal(res, 5.0, 1e-6));
     }
@@ -246,8 +246,8 @@ mod tests {
     #[test]
     fn test_broadcast_simd_subtract() {
         let f = broadcast_simd(|a, b| a - b);
-        let v1 = Vec4::new(1.0, 2.0, 3.0, 4.0);
-        let v2 = Vec4::new(4.0, 3.0, 2.0, 1.0);
+        let v1 = Vec4([1.0, 2.0, 3.0, 4.0]);
+        let v2 = Vec4([4.0, 3.0, 2.0, 1.0]);
         let res = f(&[v1, v2]);
         assert!(almost_equal(res, 0.0, 1e-6));
     }
@@ -255,9 +255,9 @@ mod tests {
     #[test]
     fn test_broadcast_simd_odd_length() {
         let f = broadcast_simd(|a, b| a + b);
-        let v1 = Vec4::new(1.0, 2.0, 3.0, 4.0);
-        let v2 = Vec4::new(4.0, 3.0, 2.0, 1.0);
-        let v3 = Vec4::new(0.0, 0.0, 0.0, 0.0);
+        let v1 = Vec4([1.0, 2.0, 3.0, 4.0]);
+        let v2 = Vec4([4.0, 3.0, 2.0, 1.0]);
+        let v3 = Vec4([0.0, 0.0, 0.0, 0.0]);
         let res = f(&[v1, v2, v3]);
         assert!(almost_equal(res, 3.3333333, 1e-6));
     }
@@ -265,10 +265,10 @@ mod tests {
     #[test]
     fn test_broadcast_simd_multiple_pairs() {
         let f = broadcast_simd(|a, b| a + b);
-        let v1 = Vec4::new(1.0, 1.0, 1.0, 1.0);
-        let v2 = Vec4::new(1.0, 1.0, 1.0, 1.0);
-        let v3 = Vec4::new(2.0, 2.0, 2.0, 2.0);
-        let v4 = Vec4::new(2.0, 2.0, 2.0, 2.0);
+        let v1 = Vec4([1.0, 1.0, 1.0, 1.0]);
+        let v2 = Vec4([1.0, 1.0, 1.0, 1.0]);
+        let v3 = Vec4([2.0, 2.0, 2.0, 2.0]);
+        let v4 = Vec4([2.0, 2.0, 2.0, 2.0]);
         let res = f(&[v1, v2, v3, v4]);
         assert!(almost_equal(res, 3.0, 1e-6));
     }
@@ -287,15 +287,15 @@ mod tests {
         let mins = (0..8).map(|i| i as f32).collect::<Vec<f32>>();
         let maxs = (0..8).map(|i| (i as f32) + 10.0).collect::<Vec<f32>>();
         let out = fit_in_bounds_simd(&values, &mins, &maxs);
-        let expected_lo = Vec4::from_array([0.0, 1.0, 2.0, 3.0]);
-        let expected_hi = Vec4::from_array([4.0, 5.0, 6.0, 7.0]);
+        let expected_lo = Vec4::from([0.0, 1.0, 2.0, 3.0]);
+        let expected_hi = Vec4::from([4.0, 5.0, 6.0, 7.0]);
         assert_eq!(
             out[0],
-            Vec4::new(expected_lo.x, expected_lo.z, expected_hi.x, expected_hi.z)
+            Vec4([expected_lo[0], expected_lo[2], expected_hi[0], expected_hi[2]])
         );
         assert_eq!(
             out[1],
-            Vec4::new(expected_lo.y, expected_lo.w, expected_hi.y, expected_hi.w)
+            Vec4([expected_lo[1], expected_lo[3], expected_hi[1], expected_hi[3]])
         );
     }
 
@@ -305,15 +305,15 @@ mod tests {
         let mins = (0..8).map(|i| i as f32).collect::<Vec<f32>>();
         let maxs = (0..8).map(|i| (i as f32) + 10.0).collect::<Vec<f32>>();
         let out = fit_in_bounds_simd(&values, &mins, &maxs);
-        let expected_lo = Vec4::from_array([10.0, 11.0, 12.0, 13.0]);
-        let expected_hi = Vec4::from_array([14.0, 15.0, 16.0, 17.0]);
+        let expected_lo = Vec4::from([10.0, 11.0, 12.0, 13.0]);
+        let expected_hi = Vec4::from([14.0, 15.0, 16.0, 17.0]);
         assert_eq!(
             out[0],
-            Vec4::new(expected_lo.x, expected_lo.z, expected_hi.x, expected_hi.z)
+            Vec4([expected_lo[0], expected_lo[2], expected_hi[0], expected_hi[2]])
         );
         assert_eq!(
             out[1],
-            Vec4::new(expected_lo.y, expected_lo.w, expected_hi.y, expected_hi.w)
+            Vec4([expected_lo[1], expected_lo[3], expected_hi[1], expected_hi[3]])
         );
     }
 
@@ -323,15 +323,15 @@ mod tests {
         let mins = (0..8).map(|i| i as f32).collect::<Vec<f32>>();
         let maxs = (0..8).map(|i| (i as f32) + 10.0).collect::<Vec<f32>>();
         let out = fit_in_bounds_simd(&values, &mins, &maxs);
-        let expected_lo = Vec4::from_array([5.0, 6.0, 7.0, 8.0]);
-        let expected_hi = Vec4::from_array([9.0, 10.0, 11.0, 12.0]);
+        let expected_lo = Vec4::from([5.0, 6.0, 7.0, 8.0]);
+        let expected_hi = Vec4::from([9.0, 10.0, 11.0, 12.0]);
         assert_eq!(
             out[0],
-            Vec4::new(expected_lo.x, expected_lo.z, expected_hi.x, expected_hi.z)
+            Vec4([expected_lo[0], expected_lo[2], expected_hi[0], expected_hi[2]])
         );
         assert_eq!(
             out[1],
-            Vec4::new(expected_lo.y, expected_lo.w, expected_hi.y, expected_hi.w)
+            Vec4([expected_lo[1], expected_lo[3], expected_hi[1], expected_hi[3]])
         );
     }
 
@@ -341,8 +341,8 @@ mod tests {
         let mins = vec![0.0_f32; 8];
         let maxs = vec![10.0_f32; 8];
         let out = fit_in_bounds_simd(&values, &mins, &maxs);
-        let evens_expected = Vec4::new(0.0, 0.0, 0.0, 0.0);
-        let odds_expected = Vec4::new(5.0, 5.0, 5.0, 5.0);
+        let evens_expected = Vec4([0.0, 0.0, 0.0, 0.0]);
+        let odds_expected = Vec4([5.0, 5.0, 5.0, 5.0]);
         assert_eq!(out[0], evens_expected);
         assert_eq!(out[1], odds_expected);
     }
@@ -354,7 +354,7 @@ mod tests {
         let maxs = vec![2.0_f32; 10];
         let out = fit_in_bounds_simd(&values, &mins, &maxs);
         assert_eq!(out.len(), 2);
-        let expected_vec = Vec4::new(2.0, 2.0, 2.0, 2.0);
+        let expected_vec = Vec4([2.0, 2.0, 2.0, 2.0]);
         assert_eq!(out[0], expected_vec);
         assert_eq!(out[1], expected_vec);
     }
@@ -464,7 +464,7 @@ mod tests {
 
     #[test]
     fn test_vec4_ext_methods() {
-        let v = Vec4::new(2.0, 3.0, 4.0, 5.0);
+        let v = Vec4([2.0, 3.0, 4.0, 5.0]);
         assert_eq!(v.square(), v * v);
         assert_eq!(v.cube(), v * v * v);
         assert_eq!(v.tesseract(), v * v * v * v);

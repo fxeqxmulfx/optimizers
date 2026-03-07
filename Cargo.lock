@@ -1028,6 +1028,7 @@ dependencies = [
  "rand 0.10.0",
  "rand_distr",
  "rayon",
+ "simd_vector",
 ]
 
 [[package]]
@@ -1475,6 +1476,12 @@ checksum = "95890f873bec569a0362c235787f3aca6e1e887302ba4840839bcc6459c42da6"
 dependencies = [
  "quote",
 ]
+
+[[package]]
+name = "simd_vector"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e1212360162396f6bfa12452a953bcc48aca1d18b6abddba95171cfde1953c4"
 
 [[package]]
 name = "smallvec"

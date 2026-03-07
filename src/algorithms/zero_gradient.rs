@@ -1,4 +1,4 @@
-use glam::Vec4;
+use simd_vector::Vec4;
 use rand::{SeedableRng, rngs::StdRng};
 use rand_distr::{Distribution, Uniform};
 

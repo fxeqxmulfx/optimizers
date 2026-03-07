@@ -8,16 +8,16 @@ use rayon::prelude::*;
 use optimizers::{
     algorithms::ansr::new_ansr,
     default_algorithms_params::ANSR_PARAMS,
-    functions::LMMAES_TEST_FUNCTIONS,
+    functions::MAIN_TEST_FUNCTIONS,
     runner::run_multiple_optimizaions,
     utils::{all_combinations, f32_to_i64},
 };
 
 fn main() {
     let ansr_params = ANSR_PARAMS.clone();
-    let functions = &LMMAES_TEST_FUNCTIONS;
-    let dimension_count = 1024;
-    let maxiter = 100_000;
+    let functions = &MAIN_TEST_FUNCTIONS;
+    let dimension_count = 16;
+    let maxiter = 300_000;
     let seed_count = 10;
     let stop_residual = 0.01;
     let all_combinations = all_combinations(&ansr_params);

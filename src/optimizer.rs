@@ -1,4 +1,4 @@
-use glam::Vec4;
+use simd_vector::Vec4;
 
 use crate::early_stop_callback::EarlyStopCallback;
 

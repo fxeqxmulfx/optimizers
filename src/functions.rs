@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, f32::consts::PI};
 
-use glam::Vec4;
 use once_cell::sync::Lazy;
+use simd_vector::Vec4;
 
 use crate::utils::Vec4Ext;
 
@@ -270,65 +270,60 @@ mod tests {
 
     #[test]
     fn test_known_extrema() {
-        let s_min = shifted_sphere(Vec4::splat(-PI), Vec4::splat(-PI)).x;
+        let s_min = shifted_sphere(Vec4::splat(-PI), Vec4::splat(-PI))[0];
         assert!(s_min.abs() < 1e-3, "Shifted sphere min not 0");
-        let s_max = shifted_sphere(Vec4::splat(10.0), Vec4::splat(10.0)).x;
+        let s_max = shifted_sphere(Vec4::splat(10.0), Vec4::splat(10.0))[0];
         assert!((s_max - 1.0).abs() < 1e-3, "Shifted sphere max not 1");
-        let w_min = shifted_weierstrass(Vec4::splat(1.0 - PI), Vec4::splat(1.0 - PI)).x;
+        let w_min = shifted_weierstrass(Vec4::splat(1.0 - PI), Vec4::splat(1.0 - PI))[0];
         assert!(w_min.abs() < 1e-2, "Shifted weierstrass min not 0");
-        let w_max = shifted_weierstrass(Vec4::splat(-PI), Vec4::splat(-PI)).x;
+        let w_max = shifted_weierstrass(Vec4::splat(-PI), Vec4::splat(-PI))[0];
         assert!((w_max - 1.0).abs() < 1e-3, "Shifted weierstrass max not 1");
         let h_min = hilly(
             Vec4::splat(-1.4809053654574758),
             Vec4::splat(0.6254111843389699),
-        )
-        .x;
+        )[0];
         assert!(h_min.abs() < 1e-3, "Hilly min not 0");
         let h_max = hilly(
             Vec4::splat(1.3200361419666748),
             Vec4::splat(1.9993728393766546),
-        )
-        .x;
+        )[0];
         assert!((h_max - 1.0).abs() < 1e-3, "Hilly max not 1");
         let f_min = forest(
             Vec4::splat(-40.840704496667314),
             Vec4::splat(-41.982297150257104),
-        )
-        .x;
+        )[0];
         assert!(f_min.abs() < 1e-3, "Forest min not 0");
         let f_max = forest(
             Vec4::splat(-42.2988573690385010),
             Vec4::splat(-45.9956119113080675),
-        )
-        .x;
+        )[0];
         assert!((f_max - 1.0).abs() < 1e-3, "Forest max not 1");
         let m_min = megacity(
             Vec4::splat(-3.1357545740179393),
             Vec4::splat(2.006136371058429),
-        )
-        .x;
+        )[0];
         assert!(m_min.abs() < 1e-3, "Megacity min not 0");
         let m_max = megacity(Vec4::splat(-9.5), Vec4::splat(-7.5))[0];
         assert!((m_max - 1.0).abs() < 1e-3, "Megacity max not 1");
-        let s_min = sphere(Vec4::splat(0.0), Vec4::splat(0.0)).x;
+        let s_min = sphere(Vec4::splat(0.0), Vec4::splat(0.0))[0];
         assert!(s_min.abs() < 1e-3, "Sphere min not 0");
-        let s_max = sphere(Vec4::splat(5.0), Vec4::splat(5.0)).x;
+        let s_max = sphere(Vec4::splat(5.0), Vec4::splat(5.0))[0];
         assert!((s_max - 1.0).abs() < 1e-3, "Sphere max not 1");
-        let e_min = ellipsoid(Vec4::splat(0.0), Vec4::splat(0.0)).x;
+        let e_min = ellipsoid(Vec4::splat(0.0), Vec4::splat(0.0))[0];
         assert!(e_min.abs() < 1e-3, "Ellipsoid min not 0");
-        let e_max = ellipsoid(Vec4::splat(5.0), Vec4::splat(5.0)).x;
+        let e_max = ellipsoid(Vec4::splat(5.0), Vec4::splat(5.0))[0];
         assert!((e_max - 1.0).abs() < 1e-3, "Ellipsoid max not 1");
-        let r_min = rosenbrock(Vec4::splat(1.0), Vec4::splat(1.0)).x;
+        let r_min = rosenbrock(Vec4::splat(1.0), Vec4::splat(1.0))[0];
         assert!(r_min.abs() < 1e-3, "Rosenbrock min not 0");
-        let r_max = rosenbrock(Vec4::splat(-5.0), Vec4::splat(-5.0)).x;
+        let r_max = rosenbrock(Vec4::splat(-5.0), Vec4::splat(-5.0))[0];
         assert!((r_max - 1.0).abs() < 1e-3, "Rosenbrock max not 1");
-        let d_min = discus(Vec4::splat(0.0), Vec4::splat(0.0)).x;
+        let d_min = discus(Vec4::splat(0.0), Vec4::splat(0.0))[0];
         assert!(d_min.abs() < 1e-3, "Discus min not 0");
-        let d_max = discus(Vec4::splat(5.0), Vec4::splat(5.0)).x;
+        let d_max = discus(Vec4::splat(5.0), Vec4::splat(5.0))[0];
         assert!((d_max - 1.0).abs() < 1e-3, "Discus max not 1");
-        let dp_min = different_powers(Vec4::splat(0.0), Vec4::splat(0.0)).x;
+        let dp_min = different_powers(Vec4::splat(0.0), Vec4::splat(0.0))[0];
         assert!(dp_min.abs() < 1e-3, "Different Powers min not 0");
-        let dp_max = different_powers(Vec4::splat(5.0), Vec4::splat(5.0)).x;
+        let dp_max = different_powers(Vec4::splat(5.0), Vec4::splat(5.0))[0];
         assert!((dp_max - 1.0).abs() < 1e-3, "Different Powers max not 1");
     }
 }

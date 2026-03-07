@@ -13,6 +13,7 @@ plotters = "0.3.7"
 rand = "0.10.0"
 rand_distr = "0.6.0"
 rayon = "1.11.0"
+simd_vector = "0.2.0"
 
 [profile.release]
 lto = true
