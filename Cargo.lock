@@ -1472,9 +1472,9 @@ dependencies = [
 
 [[package]]
 name = "simd_vector"
-version = "0.2.3"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "867c8419f5f740ce90890d6993e89d2d289d963d971b9da6fc788d1bd4085d16"
+checksum = "403e752ad233a530964744c5197b5650a0c50a347cb4c17c0ace14ac266ca04d"
 
 [[package]]
 name = "smallvec"
