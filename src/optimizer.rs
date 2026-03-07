@@ -1,4 +1,4 @@
-use simd_vector::Vec4;
+use simd_vector::Vec8;
 
 use crate::early_stop_callback::EarlyStopCallback;
 
@@ -27,5 +27,5 @@ pub trait Optimizer {
         early_stop_callback: &EarlyStopCallback<&F>,
     ) -> OptimizerResult
     where
-        F: Fn(&[Vec4]) -> f32 + Sync;
+        F: Fn(&[Vec8]) -> f32 + Sync;
 }

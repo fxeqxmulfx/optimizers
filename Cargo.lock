@@ -629,12 +629,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "glam"
-version = "0.32.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f70749695b063ecbf6b62949ccccde2e733ec3ecbbd71d467dca4e5c6c97cca0"
-
-[[package]]
 name = "half"
 version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1020,7 +1014,6 @@ name = "optimizers"
 version = "0.1.0"
 dependencies = [
  "atomic_float",
- "glam",
  "image 0.25.9",
  "indicatif",
  "once_cell",
@@ -1479,9 +1472,9 @@ dependencies = [
 
 [[package]]
 name = "simd_vector"
-version = "0.2.0"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e1212360162396f6bfa12452a953bcc48aca1d18b6abddba95171cfde1953c4"
+checksum = "867c8419f5f740ce90890d6993e89d2d289d963d971b9da6fc788d1bd4085d16"
 
 [[package]]
 name = "smallvec"

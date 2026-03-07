@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, mem::swap};
 
-use simd_vector::Vec4;
+use simd_vector::Vec8;
 use rand::{SeedableRng, rngs::StdRng};
 use rand_distr::{Distribution, Normal, Uniform};
 
@@ -37,7 +37,7 @@ impl Optimizer for ANSR {
         early_stop_callback: &EarlyStopCallback<&F>,
     ) -> OptimizerResult
     where
-        F: Fn(&[Vec4]) -> f32 + Sync,
+        F: Fn(&[Vec8]) -> f32 + Sync,
     {
         let params = bounds.len();
         let popsize = self.popsize;

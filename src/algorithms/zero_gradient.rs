@@ -1,4 +1,4 @@
-use simd_vector::Vec4;
+use simd_vector::Vec8;
 use rand::{SeedableRng, rngs::StdRng};
 use rand_distr::{Distribution, Uniform};
 
@@ -17,7 +17,7 @@ pub fn zero_gradient<F>(
     use_history: bool,
 ) -> OptimizerResult
 where
-    F: Fn(&[Vec4]) -> f32 + Sync,
+    F: Fn(&[Vec8]) -> f32 + Sync,
 {
     let mut history = OptimizationHistory {
         x: Vec::new(),
@@ -218,7 +218,7 @@ impl Optimizer for ZeroGradient {
         _early_stop_callback: &EarlyStopCallback<&F>,
     ) -> OptimizerResult
     where
-        F: Fn(&[Vec4]) -> f32 + Sync,
+        F: Fn(&[Vec8]) -> f32 + Sync,
     {
         let params = bounds.len();
         let mut range_min: Vec<f32> = vec![0.0; params];
