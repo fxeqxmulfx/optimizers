@@ -4,6 +4,19 @@ use once_cell::sync::Lazy;
 
 use crate::algorithms::{ansr::ANSR, zero_gradient::ZeroGradient};
 
+fn frange(start: f32, step: f32, end: f32) -> Vec<f32> {
+    let n = ((end - start) / step).round() as usize + 1;
+    (0..n).map(|i| start + step * i as f32).collect()
+}
+
+fn log10_range(exp_start: i32, exp_end: i32) -> Vec<f32> {
+    if exp_start <= exp_end {
+        (exp_start..=exp_end).map(|e| 10f32.powi(e)).collect()
+    } else {
+        (exp_end..=exp_start).rev().map(|e| 10f32.powi(e)).collect()
+    }
+}
+
 pub static DEFAULT_ANSR: ANSR = ANSR {
     popsize: 4,
     restart_tolerance: 0.01,
@@ -13,25 +26,13 @@ pub static DEFAULT_ANSR: ANSR = ANSR {
 
 pub static ANSR_PARAMS: Lazy<BTreeMap<String, Vec<f32>>> = Lazy::new(|| {
     let mut m = BTreeMap::new();
-    m.insert(
-        "popsize".to_string(),
-        vec![2., 4., 8., 12., 16., 20., 24., 28., 32.],
-    );
-    m.insert(
-        "restart_tolerance".to_string(),
-        vec![1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7],
-    );
+    m.insert("popsize".to_string(), [64.0].to_vec());
+    m.insert("restart_tolerance".to_string(), log10_range(-1, -7));
     m.insert(
         "sigma".to_string(),
-        vec![0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3],
+        [vec![0.01], frange(0.05, 0.05, 1.0)].concat(),
     );
-    m.insert(
-        "self_instead_neighbour".to_string(),
-        vec![
-            0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75,
-            0.8, 0.85, 0.9, 0.95, 1.0,
-        ],
-    );
+    m.insert("self_instead_neighbour".to_string(), frange(0.0, 0.05, 1.0));
     m
 });
 

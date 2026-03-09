@@ -184,6 +184,32 @@ pub fn different_powers(x: Vec8, y: Vec8) -> Vec8 {
     scale(result, 0.0, 15_650.0, 0.0, 1.0)
 }
 
+pub static MINI_TEST_FUNCTIONS: Lazy<BTreeMap<String, TestFunction>> = Lazy::new(|| {
+    let mut m = BTreeMap::new();
+    m.insert(
+        "shifted_sphere".to_string(),
+        TestFunction {
+            func: shifted_sphere,
+            bounds: SHIFTED_SPHERE_BOUNDS,
+        },
+    );
+    m.insert(
+        "hilly".to_string(),
+        TestFunction {
+            func: hilly,
+            bounds: HILLY_BOUNDS,
+        },
+    );
+    m.insert(
+        "forest".to_string(),
+        TestFunction {
+            func: forest,
+            bounds: FOREST_BOUNDS,
+        },
+    );
+    m
+});
+
 pub static MAIN_TEST_FUNCTIONS: Lazy<BTreeMap<String, TestFunction>> = Lazy::new(|| {
     let mut m = BTreeMap::new();
     m.insert(

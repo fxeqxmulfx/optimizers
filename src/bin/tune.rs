@@ -8,16 +8,16 @@ use rayon::prelude::*;
 use optimizers::{
     algorithms::ansr::new_ansr,
     default_algorithms_params::ANSR_PARAMS,
-    functions::MAIN_TEST_FUNCTIONS,
+    functions::MINI_TEST_FUNCTIONS,
     runner::run_multiple_optimizaions,
     utils::{all_combinations, f32_to_i64},
 };
 
 fn main() {
     let ansr_params = ANSR_PARAMS.clone();
-    let functions = &MAIN_TEST_FUNCTIONS;
-    let dimension_count = 16;
-    let maxiter = 300_000;
+    let functions = &MINI_TEST_FUNCTIONS;
+    let dimension_count = 64;
+    let maxiter = 100_000;
     let seed_count = 10;
     let stop_residual = 0.01;
     let all_combinations = all_combinations(&ansr_params);
@@ -29,11 +29,11 @@ fn main() {
     let pb = ProgressBar::new(all_combinations.len() as u64);
     pb.set_style(sty.clone());
     let global_mean = AtomicF32::new(f32::INFINITY);
-    let mut results: Vec<(i64, &BTreeMap<String, f32>)> = all_combinations
+    let mut results: Vec<(i64, &BTreeMap<String, f32>, BTreeMap<String, f32>)> = all_combinations
         .par_iter()
         .map(|params| {
             let optimizer = new_ansr(params);
-            let mean = run_multiple_optimizaions(
+            let result = run_multiple_optimizaions(
                 &optimizer,
                 &functions,
                 dimension_count,
@@ -42,18 +42,19 @@ fn main() {
                 stop_residual,
                 false,
                 false,
-            )["mean"];
+            );
+            let mean = result["mean"];
             pb.inc(1);
             pb.set_message(format!(
                 "{}",
                 global_mean.fetch_min(mean, Ordering::Relaxed)
             ));
-            (f32_to_i64(mean), params)
+            (f32_to_i64(mean), params, result)
         })
         .collect();
-    results.sort_by_key(|&(mean, _)| mean);
-    println!("Top 10 (lowest) mean values:");
-    for (rank, (mean, params)) in results.iter().take(10).enumerate() {
-        println!("{}: mean = {}   params = {:?}", rank + 1, mean, params);
+    results.sort_by_key(|&(mean, _, _)| mean);
+    println!("Top 100 (lowest) mean values:");
+    for (rank, (_mean, params, result)) in results.iter().take(100).enumerate() {
+        println!("{:>3}: {:?} result={:?}", rank + 1, params, result);
     }
 }
