@@ -80,8 +80,12 @@ pub fn fit_in_bounds_simd(values: &[f32], range_min: &[f32], range_max: &[f32]) 
         ]);
         let f_lo = mins_lo + vals_lo * (maxs_lo - mins_lo);
         let f_hi = mins_hi + vals_hi * (maxs_hi - mins_hi);
-        let evens = Vec8([f_lo[0], f_lo[2], f_lo[4], f_lo[6], f_hi[0], f_hi[2], f_hi[4], f_hi[6]]);
-        let odds = Vec8([f_lo[1], f_lo[3], f_lo[5], f_lo[7], f_hi[1], f_hi[3], f_hi[5], f_hi[7]]);
+        let evens = Vec8([
+            f_lo[0], f_lo[2], f_lo[4], f_lo[6], f_hi[0], f_hi[2], f_hi[4], f_hi[6],
+        ]);
+        let odds = Vec8([
+            f_lo[1], f_lo[3], f_lo[5], f_lo[7], f_hi[1], f_hi[3], f_hi[5], f_hi[7],
+        ]);
         out.push(evens);
         out.push(odds);
     }
@@ -148,7 +152,7 @@ where
         x.chunks_exact(2)
             .map(|pair| func(pair[0], pair[1]))
             .sum::<Vec8>()
-            .dot(Vec8::ONE)
+            .sum()
             / (x.len() * 4) as f32
     }
 }
@@ -161,7 +165,7 @@ where
         x.chunks_exact(2)
             .map(|pair| func(Vec8::splat(pair[0]), Vec8::splat(pair[1])))
             .sum::<Vec8>()
-            .dot(Vec8::ONE)
+            .sum()
             / (x.len() * 4) as f32
     }
 }
@@ -324,9 +328,15 @@ mod tests {
         let maxs = (0..16).map(|i| (i as f32) + 10.0).collect::<Vec<f32>>();
         let out = fit_in_bounds_simd(&values, &mins, &maxs);
         // evens: indices 0,2,4,6,8,10,12,14 → maxs at those indices
-        assert_eq!(out[0], Vec8([10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 22.0, 24.0]));
+        assert_eq!(
+            out[0],
+            Vec8([10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 22.0, 24.0])
+        );
         // odds: indices 1,3,5,7,9,11,13,15 → maxs at those indices
-        assert_eq!(out[1], Vec8([11.0, 13.0, 15.0, 17.0, 19.0, 21.0, 23.0, 25.0]));
+        assert_eq!(
+            out[1],
+            Vec8([11.0, 13.0, 15.0, 17.0, 19.0, 21.0, 23.0, 25.0])
+        );
     }
 
     #[test]
@@ -343,7 +353,9 @@ mod tests {
 
     #[test]
     fn test_even_odd_ordering() {
-        let values = vec![0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5];
+        let values = vec![
+            0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5, 0.0, 0.5,
+        ];
         let mins = vec![0.0_f32; 16];
         let maxs = vec![10.0_f32; 16];
         let out = fit_in_bounds_simd(&values, &mins, &maxs);
