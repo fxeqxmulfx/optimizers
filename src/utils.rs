@@ -233,11 +233,12 @@ where
     F: Fn(Vec8, Vec8) -> Vec8 + Sync,
 {
     move |x: &[Vec8]| -> f32 {
+        let inv = 1.0 / (x.len() * 4) as f32;
         x.chunks_exact(2)
             .map(|pair| func(pair[0], pair[1]))
             .sum::<Vec8>()
             .sum()
-            / (x.len() * 4) as f32
+            * inv
     }
 }
 
