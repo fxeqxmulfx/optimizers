@@ -90,3 +90,75 @@ where
     );
     total_result
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        default_algorithms_params::DEFAULT_ANSR,
+        functions::MINI_TEST_FUNCTIONS,
+    };
+
+    #[test]
+    fn test_run_multiple_sequential() {
+        let result = run_multiple_optimizaions(
+            &DEFAULT_ANSR,
+            &MINI_TEST_FUNCTIONS,
+            16,
+            10_000,
+            2,
+            0.1,
+            false,
+            false,
+        );
+        assert!(result.contains_key("mean"));
+        assert!(result.contains_key("shifted_sphere"));
+        assert!(result.contains_key("hilly"));
+        assert!(result.contains_key("forest"));
+    }
+
+    #[test]
+    fn test_run_multiple_parallel() {
+        let result = run_multiple_optimizaions(
+            &DEFAULT_ANSR,
+            &MINI_TEST_FUNCTIONS,
+            16,
+            10_000,
+            2,
+            0.1,
+            false,
+            true,
+        );
+        assert!(result.contains_key("mean"));
+    }
+
+    #[test]
+    fn test_run_multiple_with_progress_bar() {
+        let result = run_multiple_optimizaions(
+            &DEFAULT_ANSR,
+            &MINI_TEST_FUNCTIONS,
+            16,
+            10_000,
+            1,
+            0.1,
+            true,
+            false,
+        );
+        assert!(result.contains_key("mean"));
+    }
+
+    #[test]
+    fn test_run_multiple_impossible_target() {
+        let result = run_multiple_optimizaions(
+            &DEFAULT_ANSR,
+            &MINI_TEST_FUNCTIONS,
+            16,
+            100,
+            1,
+            0.0,
+            false,
+            false,
+        );
+        assert_eq!(result["shifted_sphere"], f32::INFINITY);
+    }
+}

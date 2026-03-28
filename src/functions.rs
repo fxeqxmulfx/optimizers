@@ -353,4 +353,51 @@ mod tests {
         let dp_max = different_powers(Vec8::splat(5.0), Vec8::splat(5.0))[0];
         assert!((dp_max - 1.0).abs() < 1e-3, "Different Powers max not 1");
     }
+
+    #[test]
+    fn test_mini_test_functions() {
+        let funcs = &*MINI_TEST_FUNCTIONS;
+        assert_eq!(funcs.len(), 3);
+        assert!(funcs.contains_key("shifted_sphere"));
+        assert!(funcs.contains_key("hilly"));
+        assert!(funcs.contains_key("forest"));
+        for (_, tf) in funcs {
+            let _ = (tf.func)(Vec8::splat(0.0), Vec8::splat(0.0));
+        }
+    }
+
+    #[test]
+    fn test_main_test_functions() {
+        let funcs = &*MAIN_TEST_FUNCTIONS;
+        assert_eq!(funcs.len(), 5);
+        assert!(funcs.contains_key("shifted_sphere"));
+        assert!(funcs.contains_key("shifted_weierstrass"));
+        assert!(funcs.contains_key("hilly"));
+        assert!(funcs.contains_key("forest"));
+        assert!(funcs.contains_key("megacity"));
+        for (_, tf) in funcs {
+            let _ = (tf.func)(Vec8::splat(0.0), Vec8::splat(0.0));
+        }
+    }
+
+    #[test]
+    fn test_lmmaes_test_functions() {
+        let funcs = &*LMMAES_TEST_FUNCTIONS;
+        assert_eq!(funcs.len(), 5);
+        assert!(funcs.contains_key("sphere"));
+        assert!(funcs.contains_key("ellipsoid"));
+        assert!(funcs.contains_key("rosenbrock"));
+        assert!(funcs.contains_key("discus"));
+        assert!(funcs.contains_key("different_powers"));
+        for (_, tf) in funcs {
+            let _ = (tf.func)(Vec8::splat(0.0), Vec8::splat(0.0));
+        }
+    }
+
+    #[test]
+    fn test_test_function_clone() {
+        let tf = MINI_TEST_FUNCTIONS.get("hilly").unwrap().clone();
+        let result = (tf.func)(Vec8::splat(0.0), Vec8::splat(0.0));
+        assert!(result[0].is_finite());
+    }
 }

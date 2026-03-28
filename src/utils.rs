@@ -581,4 +581,61 @@ mod tests {
         let out = fit_in_bounds_simd(&values, &mins, &maxs);
         assert!(out.is_empty());
     }
+
+    #[test]
+    fn test_bounds_simd_new_and_output_len() {
+        let mins = vec![0.0_f32; 16];
+        let maxs = vec![10.0_f32; 16];
+        let bs = BoundsSimd::new(&mins, &maxs);
+        assert_eq!(bs.output_len(), 2);
+    }
+
+    #[test]
+    fn test_bounds_simd_transform_matches_fit_in_bounds_simd() {
+        let values = vec![0.5_f32; 16];
+        let mins = (0..16).map(|i| i as f32).collect::<Vec<f32>>();
+        let maxs = (0..16).map(|i| (i as f32) + 10.0).collect::<Vec<f32>>();
+        let expected = fit_in_bounds_simd(&values, &mins, &maxs);
+        let bs = BoundsSimd::new(&mins, &maxs);
+        let mut out = vec![Vec8::ZERO; bs.output_len()];
+        bs.transform_into(&values, &mut out);
+        assert_eq!(out, expected);
+    }
+
+    #[test]
+    fn test_bounds_simd_transform_zeros() {
+        let values = vec![0.0_f32; 16];
+        let mins = (0..16).map(|i| i as f32).collect::<Vec<f32>>();
+        let maxs = (0..16).map(|i| (i as f32) + 10.0).collect::<Vec<f32>>();
+        let expected = fit_in_bounds_simd(&values, &mins, &maxs);
+        let bs = BoundsSimd::new(&mins, &maxs);
+        let mut out = vec![Vec8::ZERO; bs.output_len()];
+        bs.transform_into(&values, &mut out);
+        assert_eq!(out, expected);
+    }
+
+    #[test]
+    fn test_bounds_simd_transform_ones() {
+        let values = vec![1.0_f32; 16];
+        let mins = (0..16).map(|i| i as f32).collect::<Vec<f32>>();
+        let maxs = (0..16).map(|i| (i as f32) + 10.0).collect::<Vec<f32>>();
+        let expected = fit_in_bounds_simd(&values, &mins, &maxs);
+        let bs = BoundsSimd::new(&mins, &maxs);
+        let mut out = vec![Vec8::ZERO; bs.output_len()];
+        bs.transform_into(&values, &mut out);
+        assert_eq!(out, expected);
+    }
+
+    #[test]
+    fn test_bounds_simd_multiple_groups() {
+        let values = vec![0.25_f32; 32];
+        let mins = vec![0.0_f32; 32];
+        let maxs = vec![4.0_f32; 32];
+        let expected = fit_in_bounds_simd(&values, &mins, &maxs);
+        let bs = BoundsSimd::new(&mins, &maxs);
+        assert_eq!(bs.output_len(), 4);
+        let mut out = vec![Vec8::ZERO; bs.output_len()];
+        bs.transform_into(&values, &mut out);
+        assert_eq!(out, expected);
+    }
 }

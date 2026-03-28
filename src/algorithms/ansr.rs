@@ -160,3 +160,77 @@ impl Optimizer for ANSR {
         return result;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        early_stop_callback::EarlyStopCallback,
+        functions::{shifted_sphere, SHIFTED_SPHERE_BOUNDS},
+        utils::broadcast_simd,
+    };
+
+    #[test]
+    fn test_ansr_finds_minimum() {
+        let optimizer = ANSR {
+            popsize: 4,
+            restart_tolerance: 0.01,
+            sigma: 0.05,
+            self_instead_neighbour: 0.9,
+        };
+        let func = broadcast_simd(shifted_sphere);
+        let bounds = SHIFTED_SPHERE_BOUNDS.repeat(8);
+        let early_stop = EarlyStopCallback::new(&func, 0.01);
+        let result = optimizer.find_infimum(&func, &bounds, 100_000, 0, false, &early_stop);
+        assert!(result.f_x <= 0.01, "ANSR did not converge: f_x={}", result.f_x);
+        assert!(result.nfev > 0);
+        assert!(result.history.is_none());
+    }
+
+    #[test]
+    fn test_ansr_with_history() {
+        let optimizer = ANSR {
+            popsize: 4,
+            restart_tolerance: 0.01,
+            sigma: 0.05,
+            self_instead_neighbour: 0.9,
+        };
+        let func = broadcast_simd(shifted_sphere);
+        let bounds = SHIFTED_SPHERE_BOUNDS.repeat(8);
+        let early_stop = EarlyStopCallback::new(&func, 0.01);
+        let result = optimizer.find_infimum(&func, &bounds, 1_000, 0, true, &early_stop);
+        let history = result.history.unwrap();
+        assert!(!history.x.is_empty());
+        assert!(!history.f_x.is_empty());
+        assert_eq!(history.x.len(), history.f_x.len());
+    }
+
+    #[test]
+    fn test_new_ansr() {
+        let mut params = BTreeMap::new();
+        params.insert("popsize".to_string(), 8.0);
+        params.insert("restart_tolerance".to_string(), 0.001);
+        params.insert("sigma".to_string(), 0.1);
+        params.insert("self_instead_neighbour".to_string(), 0.5);
+        let optimizer = new_ansr(&params);
+        assert_eq!(optimizer.popsize, 8);
+        assert_eq!(optimizer.sigma, 0.1);
+    }
+
+    #[test]
+    fn test_ansr_deterministic() {
+        let optimizer = ANSR {
+            popsize: 4,
+            restart_tolerance: 0.01,
+            sigma: 0.05,
+            self_instead_neighbour: 0.9,
+        };
+        let func = broadcast_simd(shifted_sphere);
+        let bounds = SHIFTED_SPHERE_BOUNDS.repeat(8);
+        let early_stop = EarlyStopCallback::new(&func, 0.01);
+        let r1 = optimizer.find_infimum(&func, &bounds, 10_000, 42, false, &early_stop);
+        let r2 = optimizer.find_infimum(&func, &bounds, 10_000, 42, false, &early_stop);
+        assert_eq!(r1.f_x, r2.f_x);
+        assert_eq!(r1.nfev, r2.nfev);
+    }
+}

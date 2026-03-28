@@ -245,3 +245,94 @@ impl Optimizer for ZeroGradient {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        early_stop_callback::EarlyStopCallback,
+        functions::{sphere, SPHERE_BOUNDS},
+        utils::broadcast_simd,
+    };
+
+    #[test]
+    fn test_zero_gradient_finds_minimum() {
+        let optimizer = ZeroGradient { init_jump: 0.1 };
+        let func = broadcast_simd(sphere);
+        let bounds = SPHERE_BOUNDS.repeat(8);
+        let early_stop = EarlyStopCallback::new(&func, 0.01);
+        let result = optimizer.find_infimum(&func, &bounds, 1_000_000, 0, false, &early_stop);
+        assert!(result.f_x < 0.1, "ZeroGradient f_x={}", result.f_x);
+        assert!(result.nfev > 0);
+    }
+
+    #[test]
+    fn test_zero_gradient_with_history() {
+        let optimizer = ZeroGradient { init_jump: 0.1 };
+        let func = broadcast_simd(sphere);
+        let bounds = SPHERE_BOUNDS.repeat(8);
+        let early_stop = EarlyStopCallback::new(&func, 0.01);
+        let result = optimizer.find_infimum(&func, &bounds, 1_000_000, 0, true, &early_stop);
+        let history = result.history.unwrap();
+        assert!(!history.x.is_empty());
+        assert!(!history.f_x.is_empty());
+    }
+
+    #[test]
+    fn test_zero_gradient_bisection_exhaustion() {
+        // Staircase function: floor(x*100)/100 — has flat regions.
+        // From a position on a flat region, both +/- small steps give same or worse value.
+        // The doubling loop will find improvement by jumping to a different stair,
+        // then the bisection loop will exhaust because near the stair edge both
+        // directions are equally flat → continue until epsilon.
+        use simd_vector::fast::FastMath;
+        let func = |x: &[Vec8]| -> f32 {
+            x.iter()
+                .map(|v| ((*v * Vec8::splat(100.0)).floor() / Vec8::splat(100.0)).sum())
+                .sum::<f32>()
+                / (x.len() * 8) as f32
+        };
+        let range_min = vec![0.0; 16];
+        let range_max = vec![10.0; 16];
+        let positions = vec![0.55; 16];
+        let result = zero_gradient(&func, &range_min, &range_max, &positions, 0.1, false);
+        assert!(result.f_x.is_finite());
+    }
+
+    #[test]
+    fn test_zero_gradient_standalone() {
+        let func = broadcast_simd(sphere);
+        let range_min = vec![-5.0; 16];
+        let range_max = vec![5.0; 16];
+        let positions = vec![0.5; 16];
+        let result = zero_gradient(&func, &range_min, &range_max, &positions, 0.1, false);
+        assert!(result.f_x < 0.1);
+        assert!(result.history.is_none());
+    }
+
+    #[test]
+    fn test_zero_gradient_boundary_clamp() {
+        // f(x) = sum(x_i): monotonically decreasing toward boundary 0.
+        // Start at 0.5, init_jump=0.4: the doubling loop will push coordinates
+        // past 0 where clamp_to_unit_cube returns exactly 0.0, hitting the break.
+        use simd_vector::fast::FastMath;
+        let func = |x: &[Vec8]| -> f32 {
+            x.iter().map(|v| v.sum()).sum::<f32>() / (x.len() * 8) as f32
+        };
+        let range_min = vec![0.0; 16];
+        let range_max = vec![1.0; 16];
+        let positions = vec![0.5; 16];
+        let result = zero_gradient(&func, &range_min, &range_max, &positions, 0.4, true);
+        assert!(result.f_x < 0.05);
+    }
+
+    #[test]
+    fn test_zero_gradient_standalone_with_history() {
+        let func = broadcast_simd(sphere);
+        let range_min = vec![-5.0; 16];
+        let range_max = vec![5.0; 16];
+        let positions = vec![0.5; 16];
+        let result = zero_gradient(&func, &range_min, &range_max, &positions, 0.1, true);
+        assert!(result.history.is_some());
+    }
+}
