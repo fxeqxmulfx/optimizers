@@ -51,27 +51,28 @@ impl Optimizer for ANSR {
         }
         let bounds_simd = BoundsSimd::new(&range_min, &range_max);
         let mut simd_buf = vec![Vec8::ZERO; bounds_simd.output_len()];
-        let mut current_positions: Vec<Vec<f32>> = vec![vec![0.0; params]; popsize];
+        let stride = params;
+        let mut current_positions: Vec<f32> = vec![0.0; popsize * stride];
         let mut rng: Pcg64Mcg = SeedableRng::seed_from_u64(seed);
         let random = Uniform::new_inclusive(0.0, 1.0).unwrap();
-        for p in 0..popsize {
-            for d in 0..params {
-                current_positions[p][d] = random.sample(&mut rng);
-            }
+        for i in 0..popsize * stride {
+            current_positions[i] = random.sample(&mut rng);
         }
-        let mut best_positions: Vec<Vec<f32>> = vec![vec![0.0; params]; popsize];
+        let mut best_positions: Vec<f32> = vec![0.0; popsize * stride];
         let mut best_residuals: Vec<f32> = vec![f32::INFINITY; popsize];
         let restart_tolerance = self.restart_tolerance;
         let sigma = self.sigma;
         let normal = Normal::new(0.0, sigma).unwrap();
         let mut current_residuals: Vec<f32> = vec![f32::INFINITY; popsize];
         let mut ind = 0;
+        let stop_residual = early_stop_callback.stop_residual();
         let mut history = OptimizationHistory {
             x: Vec::new(),
             f_x: Vec::new(),
         };
         if use_history {
-            history.x.push(current_positions.clone());
+            let positions_vecs: Vec<Vec<f32>> = current_positions.chunks_exact(stride).map(|c| c.to_vec()).collect();
+            history.x.push(positions_vecs);
             history.f_x.push(current_residuals.clone());
         }
         let mut current_epoch = 0;
@@ -79,25 +80,28 @@ impl Optimizer for ANSR {
         let self_instead_neighbour = self.self_instead_neighbour;
         for epoch in 0..max_epoch {
             for p in 0..popsize {
-                bounds_simd.transform_into(&current_positions[p], &mut simd_buf);
+                let off = p * stride;
+                bounds_simd.transform_into(&current_positions[off..off + stride], &mut simd_buf);
                 current_residuals[p] = func(&simd_buf);
             }
             for p in 0..popsize {
                 if current_residuals[p] < best_residuals[p] {
                     best_residuals[p] = current_residuals[p];
-                    best_positions[p].copy_from_slice(&current_positions[p]);
+                    let off = p * stride;
+                    best_positions[off..off + stride]
+                        .copy_from_slice(&current_positions[off..off + stride]);
                     if best_residuals[p] < best_residuals[ind] {
                         ind = p;
                     }
                 }
             }
             if use_history {
-                history.x.push(best_positions.clone());
+                let positions_vecs: Vec<Vec<f32>> = best_positions.chunks_exact(stride).map(|c| c.to_vec()).collect();
+                history.x.push(positions_vecs);
                 history.f_x.push(best_residuals.clone());
             }
             current_epoch = epoch;
-            bounds_simd.transform_into(&best_positions[ind], &mut simd_buf);
-            if early_stop_callback.should_stop(&simd_buf) {
+            if best_residuals[ind] <= stop_residual {
                 break;
             }
             for lhs in 0..popsize {
@@ -116,44 +120,47 @@ impl Optimizer for ANSR {
                     if max_residual != 0.0
                         && (max_residual - min_residual) / max_residual < restart_tolerance
                     {
-                        // Reset the loser (worse residual), but never the global best
                         let loser = if lhs == ind || (rhs != ind && best_residuals[lhs] < best_residuals[rhs]) {
                             rhs
                         } else {
                             lhs
                         };
                         best_residuals[loser] = f32::INFINITY;
+                        let off = loser * stride;
                         for d in 0..params {
-                            best_positions[loser][d] = random.sample(&mut rng);
-                            current_positions[loser][d] = random.sample(&mut rng);
+                            best_positions[off + d] = random.sample(&mut rng);
+                            current_positions[off + d] = random.sample(&mut rng);
                         }
                     }
                 }
             }
             for p in 0..popsize {
+                let p_off = p * stride;
                 for d in 0..params {
                     if random.sample(&mut rng) <= self_instead_neighbour {
-                        current_positions[p][d] = clamp_to_unit_cube(
-                            best_positions[p][d]
+                        current_positions[p_off + d] = clamp_to_unit_cube(
+                            best_positions[p_off + d]
                                 + normal.sample(&mut rng)
-                                    * f32::abs(best_positions[p][d] - current_positions[p][d]),
+                                    * f32::abs(best_positions[p_off + d] - current_positions[p_off + d]),
                         )
                     } else {
                         let mut r = popsize_distr.sample(&mut rng);
                         while r == p {
                             r = popsize_distr.sample(&mut rng);
                         }
-                        current_positions[p][d] = clamp_to_unit_cube(
-                            best_positions[r][d]
+                        let r_off = r * stride;
+                        current_positions[p_off + d] = clamp_to_unit_cube(
+                            best_positions[r_off + d]
                                 + normal.sample(&mut rng)
-                                    * f32::abs(best_positions[r][d] - current_positions[p][d]),
+                                    * f32::abs(best_positions[r_off + d] - current_positions[p_off + d]),
                         )
                     }
                 }
             }
         }
+        let ind_off = ind * stride;
         let result = OptimizerResult {
-            x: fit_in_bounds(&best_positions[ind], &range_min, &range_max),
+            x: fit_in_bounds(&best_positions[ind_off..ind_off + stride], &range_min, &range_max),
             f_x: best_residuals[ind],
             nfev: (current_epoch + 1) * popsize as u64,
             history: if use_history { Some(history) } else { None },
