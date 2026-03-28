@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, mem::swap};
+use std::collections::BTreeMap;
 
 use rand::SeedableRng;
 use rand_distr::{Distribution, Normal, Uniform};
@@ -8,7 +8,7 @@ use simd_vector::Vec8;
 use crate::{
     early_stop_callback::EarlyStopCallback,
     optimizer::{OptimizationHistory, Optimizer, OptimizerResult},
-    utils::{clamp_to_unit_cube, fit_in_bounds, fit_in_bounds_simd},
+    utils::{clamp_to_unit_cube, fit_in_bounds, BoundsSimd},
 };
 
 pub struct ANSR {
@@ -49,6 +49,8 @@ impl Optimizer for ANSR {
             range_min[i] = bounds[i][0];
             range_max[i] = bounds[i][1];
         }
+        let bounds_simd = BoundsSimd::new(&range_min, &range_max);
+        let mut simd_buf = vec![Vec8::ZERO; bounds_simd.output_len()];
         let mut current_positions: Vec<Vec<f32>> = vec![vec![0.0; params]; popsize];
         let mut rng: Pcg64Mcg = SeedableRng::seed_from_u64(seed);
         let random = Uniform::new_inclusive(0.0, 1.0).unwrap();
@@ -77,16 +79,13 @@ impl Optimizer for ANSR {
         let self_instead_neighbour = self.self_instead_neighbour;
         for epoch in 0..max_epoch {
             for p in 0..popsize {
-                current_residuals[p] = func(&fit_in_bounds_simd(
-                    &current_positions[p],
-                    &range_min,
-                    &range_max,
-                ))
+                bounds_simd.transform_into(&current_positions[p], &mut simd_buf);
+                current_residuals[p] = func(&simd_buf);
             }
             for p in 0..popsize {
                 if current_residuals[p] < best_residuals[p] {
                     best_residuals[p] = current_residuals[p];
-                    best_positions[p] = current_positions[p].clone();
+                    best_positions[p].copy_from_slice(&current_positions[p]);
                     if best_residuals[p] < best_residuals[ind] {
                         ind = p;
                     }
@@ -97,52 +96,36 @@ impl Optimizer for ANSR {
                 history.f_x.push(best_residuals.clone());
             }
             current_epoch = epoch;
-            if early_stop_callback.should_stop(&fit_in_bounds_simd(
-                &best_positions[ind],
-                &range_min,
-                &range_max,
-            )) {
+            bounds_simd.transform_into(&best_positions[ind], &mut simd_buf);
+            if early_stop_callback.should_stop(&simd_buf) {
                 break;
             }
             for lhs in 0..popsize {
+                if best_residuals[lhs] == f32::INFINITY {
+                    continue;
+                }
                 for rhs in (lhs + 1)..popsize {
-                    let mut min_residual = best_residuals[lhs];
-                    let mut max_residual = best_residuals[rhs];
-                    if min_residual > max_residual {
-                        swap(&mut min_residual, &mut max_residual);
+                    if best_residuals[rhs] == f32::INFINITY {
+                        continue;
                     }
-                    if min_residual != f32::INFINITY
-                        && max_residual != f32::INFINITY
-                        && max_residual != 0.0
-                        && f32::abs((max_residual - min_residual) / max_residual)
-                            < restart_tolerance
+                    let (min_residual, max_residual) = if best_residuals[lhs] <= best_residuals[rhs] {
+                        (best_residuals[lhs], best_residuals[rhs])
+                    } else {
+                        (best_residuals[rhs], best_residuals[lhs])
+                    };
+                    if max_residual != 0.0
+                        && (max_residual - min_residual) / max_residual < restart_tolerance
                     {
-                        if lhs != ind && rhs != ind {
-                            if best_residuals[lhs] < best_residuals[rhs] {
-                                best_residuals[rhs] = f32::INFINITY;
-                                for d in 0..params {
-                                    best_positions[rhs][d] = random.sample(&mut rng);
-                                    current_positions[rhs][d] = random.sample(&mut rng);
-                                }
-                            } else {
-                                best_residuals[lhs] = f32::INFINITY;
-                                for d in 0..params {
-                                    best_positions[lhs][d] = random.sample(&mut rng);
-                                    current_positions[lhs][d] = random.sample(&mut rng);
-                                }
-                            }
-                        } else if lhs != ind {
-                            best_residuals[lhs] = f32::INFINITY;
-                            for d in 0..params {
-                                best_positions[lhs][d] = random.sample(&mut rng);
-                                current_positions[lhs][d] = random.sample(&mut rng);
-                            }
+                        // Reset the loser (worse residual), but never the global best
+                        let loser = if lhs == ind || (rhs != ind && best_residuals[lhs] < best_residuals[rhs]) {
+                            rhs
                         } else {
-                            best_residuals[rhs] = f32::INFINITY;
-                            for d in 0..params {
-                                best_positions[rhs][d] = random.sample(&mut rng);
-                                current_positions[rhs][d] = random.sample(&mut rng);
-                            }
+                            lhs
+                        };
+                        best_residuals[loser] = f32::INFINITY;
+                        for d in 0..params {
+                            best_positions[loser][d] = random.sample(&mut rng);
+                            current_positions[loser][d] = random.sample(&mut rng);
                         }
                     }
                 }

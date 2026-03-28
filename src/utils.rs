@@ -3,13 +3,96 @@ use std::collections::BTreeMap;
 use simd_vector::Vec8;
 
 pub fn clamp_to_unit_cube(value: f32) -> f32 {
-    if value > 1.0 {
-        return 1.0;
+    value.clamp(0.0, 1.0)
+}
+
+/// Pre-computed SIMD bounds for fast repeated `fit_in_bounds_simd` calls.
+/// Pre-computes min and range (max-min) as Vec8 pairs per group of 16 values,
+/// avoiding redundant loads and subtraction on every call.
+pub struct BoundsSimd {
+    /// [mins_lo_g0, mins_hi_g0, mins_lo_g1, mins_hi_g1, ...]
+    mins: Vec<Vec8>,
+    /// [ranges_lo_g0, ranges_hi_g0, ranges_lo_g1, ranges_hi_g1, ...]
+    ranges: Vec<Vec8>,
+    groups: usize,
+}
+
+impl BoundsSimd {
+    pub fn new(range_min: &[f32], range_max: &[f32]) -> Self {
+        let len = range_min.len();
+        let groups = len / 16;
+        let mut mins = Vec::with_capacity(groups * 2);
+        let mut ranges = Vec::with_capacity(groups * 2);
+        for g in 0..groups {
+            let base = g * 16;
+            let mins_lo = Vec8::from([
+                range_min[base], range_min[base + 1], range_min[base + 2], range_min[base + 3],
+                range_min[base + 4], range_min[base + 5], range_min[base + 6], range_min[base + 7],
+            ]);
+            let mins_hi = Vec8::from([
+                range_min[base + 8], range_min[base + 9], range_min[base + 10], range_min[base + 11],
+                range_min[base + 12], range_min[base + 13], range_min[base + 14], range_min[base + 15],
+            ]);
+            let maxs_lo = Vec8::from([
+                range_max[base], range_max[base + 1], range_max[base + 2], range_max[base + 3],
+                range_max[base + 4], range_max[base + 5], range_max[base + 6], range_max[base + 7],
+            ]);
+            let maxs_hi = Vec8::from([
+                range_max[base + 8], range_max[base + 9], range_max[base + 10], range_max[base + 11],
+                range_max[base + 12], range_max[base + 13], range_max[base + 14], range_max[base + 15],
+            ]);
+            mins.push(mins_lo);
+            mins.push(mins_hi);
+            ranges.push(maxs_lo - mins_lo);
+            ranges.push(maxs_hi - mins_hi);
+        }
+        Self { mins, ranges, groups }
     }
-    if value < 0.0 {
-        return 0.0;
+
+    #[inline]
+    pub fn output_len(&self) -> usize {
+        self.groups * 2
     }
-    return value;
+
+    /// Transform values into SIMD bounds, writing into `out`.
+    /// `out` must have length >= `self.output_len()`.
+    #[inline]
+    pub fn transform_into(&self, values: &[f32], out: &mut [Vec8]) {
+        for g in 0..self.groups {
+            let base = g * 16;
+            let pair = g * 2;
+            let vals_lo = Vec8::from([
+                values[base],
+                values[base + 1],
+                values[base + 2],
+                values[base + 3],
+                values[base + 4],
+                values[base + 5],
+                values[base + 6],
+                values[base + 7],
+            ]);
+            let vals_hi = Vec8::from([
+                values[base + 8],
+                values[base + 9],
+                values[base + 10],
+                values[base + 11],
+                values[base + 12],
+                values[base + 13],
+                values[base + 14],
+                values[base + 15],
+            ]);
+            let f_lo = vals_lo.mul_add(self.ranges[pair], self.mins[pair]);
+            let f_hi = vals_hi.mul_add(self.ranges[pair + 1], self.mins[pair + 1]);
+            out[pair] = Vec8([
+                f_lo[0], f_lo[2], f_lo[4], f_lo[6],
+                f_hi[0], f_hi[2], f_hi[4], f_hi[6],
+            ]);
+            out[pair + 1] = Vec8([
+                f_lo[1], f_lo[3], f_lo[5], f_lo[7],
+                f_hi[1], f_hi[3], f_hi[5], f_hi[7],
+            ]);
+        }
+    }
 }
 
 pub fn fit_in_bounds_simd(values: &[f32], range_min: &[f32], range_max: &[f32]) -> Vec<Vec8> {

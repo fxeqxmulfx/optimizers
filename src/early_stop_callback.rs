@@ -23,4 +23,8 @@ where
         let function = &self.function;
         function(x) <= self.stop_residual
     }
+
+    pub fn stop_residual(&self) -> f32 {
+        self.stop_residual
+    }
 }
