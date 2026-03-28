@@ -223,3 +223,123 @@ where
         Err(format!("FFmpeg error: {:?}", status.code()).into())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn simple_func(xy: &[f32]) -> f32 {
+        xy[0] * xy[0] + xy[1] * xy[1]
+    }
+
+    #[test]
+    fn test_landscape_cache_new() {
+        let cache = LandscapeCache::new(simple_func, [-1.0, 1.0], [-1.0, 1.0], 100, 100, 10)
+            .unwrap();
+        assert_eq!(cache.width, 100);
+        assert_eq!(cache.height, 100);
+        assert_eq!(cache.background_buffer.len(), 100 * 100 * 3);
+        assert_eq!(cache.offset_x, -1.0);
+        assert_eq!(cache.offset_y, -1.0);
+        assert!((cache.scale_x - 50.0).abs() < 1e-3); // 100 / 2.0
+        assert!((cache.scale_y - 50.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn test_landscape_cache_flat_function() {
+        // When true_min == true_max, the code adds 1.0 to true_max to avoid division by zero
+        let flat = |_: &[f32]| 5.0_f32;
+        let cache = LandscapeCache::new(flat, [0.0, 1.0], [0.0, 1.0], 50, 50, 5).unwrap();
+        assert_eq!(cache.background_buffer.len(), 50 * 50 * 3);
+    }
+
+    #[test]
+    fn test_map_coords_corners() {
+        let cache = LandscapeCache::new(simple_func, [0.0, 10.0], [0.0, 10.0], 100, 100, 5)
+            .unwrap();
+        // Bottom-left corner (0, 0) → pixel (0, 99)
+        let (px, py) = cache.map_coords(0.0, 0.0);
+        assert_eq!(px, 0);
+        assert_eq!(py, 99);
+        // Top-right corner (10, 10) → pixel (100, -1) clamped conceptually
+        let (px, py) = cache.map_coords(10.0, 10.0);
+        assert_eq!(px, 100);
+        assert_eq!(py, -1);
+    }
+
+    #[test]
+    fn test_map_coords_center() {
+        let cache = LandscapeCache::new(simple_func, [0.0, 10.0], [0.0, 10.0], 100, 100, 5)
+            .unwrap();
+        let (px, py) = cache.map_coords(5.0, 5.0);
+        assert_eq!(px, 50);
+        assert_eq!(py, 49);
+    }
+
+    #[test]
+    fn test_draw_fast_circle_center() {
+        let w = 20u32;
+        let h = 20u32;
+        let cache = LandscapeCache {
+            background_buffer: vec![0u8; (w * h * 3) as usize],
+            width: w,
+            height: h,
+            scale_x: 1.0,
+            scale_y: 1.0,
+            offset_x: 0.0,
+            offset_y: 0.0,
+        };
+        let mut buf = vec![0u8; (w * h * 3) as usize];
+        cache.draw_fast_circle(&mut buf, 10, 10, 2, [255, 0, 0]);
+        // Center pixel should be colored
+        let idx = ((10 * w as i32 + 10) * 3) as usize;
+        assert_eq!(buf[idx], 255);
+        assert_eq!(buf[idx + 1], 0);
+        assert_eq!(buf[idx + 2], 0);
+        // A far-away pixel should remain black
+        let far_idx = ((0 * w as i32 + 0) * 3) as usize;
+        assert_eq!(buf[far_idx], 0);
+    }
+
+    #[test]
+    fn test_draw_fast_circle_clipped_at_edge() {
+        let w = 10u32;
+        let h = 10u32;
+        let cache = LandscapeCache {
+            background_buffer: vec![0u8; (w * h * 3) as usize],
+            width: w,
+            height: h,
+            scale_x: 1.0,
+            scale_y: 1.0,
+            offset_x: 0.0,
+            offset_y: 0.0,
+        };
+        let mut buf = vec![0u8; (w * h * 3) as usize];
+        // Circle at corner — should not panic
+        cache.draw_fast_circle(&mut buf, 0, 0, 5, [0, 255, 0]);
+        // (0,0) is inside the circle
+        assert_eq!(buf[0], 0);
+        assert_eq!(buf[1], 255);
+        assert_eq!(buf[2], 0);
+    }
+
+    #[test]
+    fn test_render_frame() {
+        let cache = LandscapeCache::new(simple_func, [-5.0, 5.0], [-5.0, 5.0], 200, 200, 20)
+            .unwrap();
+        let points = vec![[0.0f32, 0.0], [1.0, 1.0], [-2.0, 3.0]];
+        let frame = cache.render_frame(&points, 1.23).unwrap();
+        assert_eq!(frame.len(), 200 * 200 * 3);
+        // Frame should differ from background (circles + text were drawn)
+        assert_ne!(frame, cache.background_buffer);
+    }
+
+    #[test]
+    fn test_render_frame_no_points() {
+        let cache = LandscapeCache::new(simple_func, [-1.0, 1.0], [-1.0, 1.0], 100, 100, 10)
+            .unwrap();
+        // Empty points — should still render the text overlay
+        let frame = cache.render_frame(&[], 0.0).unwrap();
+        assert_eq!(frame.len(), 100 * 100 * 3);
+    }
+}

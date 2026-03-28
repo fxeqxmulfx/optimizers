@@ -27,27 +27,55 @@ impl BoundsSimd {
         for g in 0..groups {
             let base = g * 16;
             let mins_lo = Vec8::from([
-                range_min[base], range_min[base + 1], range_min[base + 2], range_min[base + 3],
-                range_min[base + 4], range_min[base + 5], range_min[base + 6], range_min[base + 7],
+                range_min[base],
+                range_min[base + 1],
+                range_min[base + 2],
+                range_min[base + 3],
+                range_min[base + 4],
+                range_min[base + 5],
+                range_min[base + 6],
+                range_min[base + 7],
             ]);
             let mins_hi = Vec8::from([
-                range_min[base + 8], range_min[base + 9], range_min[base + 10], range_min[base + 11],
-                range_min[base + 12], range_min[base + 13], range_min[base + 14], range_min[base + 15],
+                range_min[base + 8],
+                range_min[base + 9],
+                range_min[base + 10],
+                range_min[base + 11],
+                range_min[base + 12],
+                range_min[base + 13],
+                range_min[base + 14],
+                range_min[base + 15],
             ]);
             let maxs_lo = Vec8::from([
-                range_max[base], range_max[base + 1], range_max[base + 2], range_max[base + 3],
-                range_max[base + 4], range_max[base + 5], range_max[base + 6], range_max[base + 7],
+                range_max[base],
+                range_max[base + 1],
+                range_max[base + 2],
+                range_max[base + 3],
+                range_max[base + 4],
+                range_max[base + 5],
+                range_max[base + 6],
+                range_max[base + 7],
             ]);
             let maxs_hi = Vec8::from([
-                range_max[base + 8], range_max[base + 9], range_max[base + 10], range_max[base + 11],
-                range_max[base + 12], range_max[base + 13], range_max[base + 14], range_max[base + 15],
+                range_max[base + 8],
+                range_max[base + 9],
+                range_max[base + 10],
+                range_max[base + 11],
+                range_max[base + 12],
+                range_max[base + 13],
+                range_max[base + 14],
+                range_max[base + 15],
             ]);
             mins.push(mins_lo);
             mins.push(mins_hi);
             ranges.push(maxs_lo - mins_lo);
             ranges.push(maxs_hi - mins_hi);
         }
-        Self { mins, ranges, groups }
+        Self {
+            mins,
+            ranges,
+            groups,
+        }
     }
 
     #[inline]
@@ -85,12 +113,10 @@ impl BoundsSimd {
             let f_lo = vals_lo.mul_add(self.ranges[pair], self.mins[pair]);
             let f_hi = vals_hi.mul_add(self.ranges[pair + 1], self.mins[pair + 1]);
             out[pair] = Vec8([
-                f_lo[0], f_lo[2], f_lo[4], f_lo[6],
-                f_hi[0], f_hi[2], f_hi[4], f_hi[6],
+                f_lo[0], f_lo[2], f_lo[4], f_lo[6], f_hi[0], f_hi[2], f_hi[4], f_hi[6],
             ]);
             out[pair + 1] = Vec8([
-                f_lo[1], f_lo[3], f_lo[5], f_lo[7],
-                f_hi[1], f_hi[3], f_hi[5], f_hi[7],
+                f_lo[1], f_lo[3], f_lo[5], f_lo[7], f_hi[1], f_hi[3], f_hi[5], f_hi[7],
             ]);
         }
     }
@@ -283,6 +309,62 @@ pub fn all_combinations(data: &BTreeMap<String, Vec<f32>>) -> Vec<BTreeMap<Strin
     let mut current = vec![0.0; keys.len()];
     rec(&keys, &values, 0, &mut current, &mut result);
     result
+}
+
+pub fn group_by_key<'a>(
+    results: &'a [(i64, BTreeMap<String, f32>, BTreeMap<String, f32>)],
+    key: &str,
+) -> BTreeMap<i64, Vec<&'a (i64, BTreeMap<String, f32>, BTreeMap<String, f32>)>> {
+    let mut grouped: BTreeMap<i64, Vec<&(i64, BTreeMap<String, f32>, BTreeMap<String, f32>)>> =
+        BTreeMap::new();
+    for entry in results {
+        let group_key = f32_to_i64(entry.1[key]);
+        grouped.entry(group_key).or_default().push(entry);
+    }
+    grouped
+}
+
+pub fn mean_and_mad(values: &[f32]) -> (f32, f32) {
+    let n = values.len() as f32;
+    let mean = values.iter().sum::<f32>() / n;
+    let mad = values.iter().map(|v| (v - mean).abs()).sum::<f32>() / n;
+    (mean, mad)
+}
+
+#[derive(Debug, PartialEq)]
+pub struct GroupSummary {
+    pub best: f32,
+    pub worst: f32,
+    pub mean: f32,
+    pub mad: f32,
+    pub count: usize,
+    pub finite_count: usize,
+}
+
+pub fn summarize_group(means: &[f32]) -> GroupSummary {
+    let finite_vals: Vec<f32> = means.iter().copied().filter(|v| v.is_finite()).collect();
+    let finite_count = finite_vals.len();
+    if finite_count == 0 {
+        return GroupSummary {
+            best: f32::INFINITY,
+            worst: f32::INFINITY,
+            mean: f32::INFINITY,
+            mad: 0.0,
+            count: means.len(),
+            finite_count: 0,
+        };
+    }
+    let (mean, mad) = mean_and_mad(&finite_vals);
+    let best = finite_vals.iter().copied().reduce(f32::min).unwrap();
+    let worst = finite_vals.iter().copied().reduce(f32::max).unwrap();
+    GroupSummary {
+        best,
+        worst,
+        mean,
+        mad,
+        count: means.len(),
+        finite_count,
+    }
 }
 
 pub fn f32_to_i64(x: f32) -> i64 {
@@ -637,5 +719,74 @@ mod tests {
         let mut out = vec![Vec8::ZERO; bs.output_len()];
         bs.transform_into(&values, &mut out);
         assert_eq!(out, expected);
+    }
+
+    #[test]
+    fn test_mean_and_mad() {
+        let (mean, mad) = mean_and_mad(&[1.0, 2.0, 3.0]);
+        assert!(almost_equal(mean, 2.0, 1e-6));
+        // MAD: |1-2| + |2-2| + |3-2| = 2, / 3 ≈ 0.6667
+        assert!(almost_equal(mad, 2.0 / 3.0, 1e-6));
+    }
+
+    #[test]
+    fn test_mean_and_mad_identical() {
+        let (mean, mad) = mean_and_mad(&[5.0, 5.0, 5.0]);
+        assert!(almost_equal(mean, 5.0, 1e-6));
+        assert!(almost_equal(mad, 0.0, 1e-6));
+    }
+
+    #[test]
+    fn test_summarize_group_normal() {
+        let s = summarize_group(&[1.0, 3.0, 5.0]);
+        assert!(almost_equal(s.best, 1.0, 1e-6));
+        assert!(almost_equal(s.worst, 5.0, 1e-6));
+        assert!(almost_equal(s.mean, 3.0, 1e-6));
+        assert_eq!(s.count, 3);
+        assert_eq!(s.finite_count, 3);
+    }
+
+    #[test]
+    fn test_summarize_group_with_inf() {
+        let s = summarize_group(&[2.0, f32::INFINITY, 4.0]);
+        assert!(almost_equal(s.best, 2.0, 1e-6));
+        assert!(almost_equal(s.worst, 4.0, 1e-6));
+        assert!(almost_equal(s.mean, 3.0, 1e-6));
+        assert_eq!(s.count, 3);
+        assert_eq!(s.finite_count, 2);
+    }
+
+    #[test]
+    fn test_summarize_group_all_inf() {
+        let s = summarize_group(&[f32::INFINITY, f32::INFINITY]);
+        assert_eq!(s.best, f32::INFINITY);
+        assert_eq!(s.worst, f32::INFINITY);
+        assert_eq!(s.mean, f32::INFINITY);
+        assert!(almost_equal(s.mad, 0.0, 1e-6));
+        assert_eq!(s.count, 2);
+        assert_eq!(s.finite_count, 0);
+    }
+
+    #[test]
+    fn test_group_by_key_basic() {
+        let mut p1 = BTreeMap::new();
+        p1.insert("k".to_string(), 1.0_f32);
+        let mut p2 = BTreeMap::new();
+        p2.insert("k".to_string(), 2.0_f32);
+        let mut p3 = BTreeMap::new();
+        p3.insert("k".to_string(), 1.0_f32);
+        let results = vec![
+            (0_i64, p1, BTreeMap::new()),
+            (1, p2, BTreeMap::new()),
+            (2, p3, BTreeMap::new()),
+        ];
+        let grouped = group_by_key(&results, "k");
+        // key 1.0 → i64 representation, key 2.0 → i64 representation
+        assert_eq!(grouped.len(), 2);
+        // group with key=1.0 should have 2 entries
+        let key_1 = f32_to_i64(1.0);
+        assert_eq!(grouped[&key_1].len(), 2);
+        let key_2 = f32_to_i64(2.0);
+        assert_eq!(grouped[&key_2].len(), 1);
     }
 }
