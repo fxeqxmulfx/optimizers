@@ -12,15 +12,15 @@
 
 ### Results
 
-The table below lists the algorithms sorted by the *average* number of function evaluations on 16‑dimensional test problems.  
-Only runs that achieved at least **99 % of the infimum** are shown.
+The table below lists the algorithms sorted by the *average* number of function evaluations on 16-dimensional test problems.
+Only runs that achieved at least **99% of the infimum** are shown.
 
-| №   | algorithm     | params                                                                        | mean_16D | shifted_sphere_16D | shifted_weierstrass_16D | hilly_16D | forest_16D | megacity_16D |
+| #   | algorithm     | params                                                                        | mean_16D | shifted_sphere_16D | shifted_weierstrass_16D | hilly_16D | forest_16D | megacity_16D |
 | --- | ------------- | ----------------------------------------------------------------------------- | -------- | ------------------ | ----------------------- | --------- | ---------- | ------------ |
-| 1   | ansr          | popsize: 4, restart_tolerance: 0.01, sigma: 0.05, self_instead_neighbour: 0.9 | 49304.93 | 626.94             | 25106.18                | 48437.4   | 19543.82   | 152810.31    |
-| inf | zero_gradient | init_jump: 0.1                                                                | inf      | 384.195            | inf                     | inf       | inf        | inf          |
+| 1   | ansr          | popsize: 4, restart_tolerance: 0.01, sigma: 0.05, self_instead_neighbour: 0.9 | 47891.6  | 626.94             | 24530.12                | 52721.24  | 19131.54   | 142448.16    |
+| inf | zero_gradient | init_jump: 0.1                                                                | inf      | 384.195            | inf                     | inf       | inf        | inf          |
 
-> **NOTE** – The “inf” rows indicate that the algorithm never reached the 99 % threshold for any of the tested functions.
+> **NOTE** - The "inf" rows indicate that the algorithm never reached the 99% threshold for any of the tested functions.
 
 ---
 
