@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use simd_vector::Vec8;
+use simd_vector::fast::FastMath;
 
 pub fn clamp_to_unit_cube(value: f32) -> f32 {
     value.clamp(0.0, 1.0)

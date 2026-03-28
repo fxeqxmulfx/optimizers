@@ -2,6 +2,7 @@ use std::{collections::BTreeMap, f32::consts::PI};
 
 use once_cell::sync::Lazy;
 use simd_vector::Vec8;
+use simd_vector::fast::FastMath;
 
 use crate::utils::Vec8Ext;
 
