@@ -149,6 +149,21 @@ pub fn megacity(x: Vec8, y: Vec8) -> Vec8 {
     scale(result, -12.0_f32, 2.0_f32, 0.0_f32, 1.0_f32)
 }
 
+pub const SHUBERT_BOUNDS: [[f32; 2]; 2] = [[-10.0, 10.0], [-10.0, 10.0]];
+
+pub fn shubert(x: Vec8, y: Vec8) -> Vec8 {
+    let mut sum_x = Vec8::splat(0.0);
+    let mut sum_y = Vec8::splat(0.0);
+    for i in 1..=5 {
+        let fi = i as f32;
+        sum_x = sum_x + fi * ((fi + 1.0) * x + fi).cos();
+        sum_y = sum_y + fi * ((fi + 1.0) * y + fi).cos();
+    }
+    let result = sum_x * sum_y;
+    // Global minimum ≈ -186.7309, max ≈ 210
+    scale(result, -186.7309, 210.0, 0.0, 1.0)
+}
+
 pub const SPHERE_BOUNDS: [[f32; 2]; 2] = [[-5.0, 5.0], [-5.0, 5.0]];
 
 pub fn sphere(x: Vec8, y: Vec8) -> Vec8 {
@@ -185,6 +200,52 @@ pub fn different_powers(x: Vec8, y: Vec8) -> Vec8 {
     scale(result, 0.0, 15_650.0, 0.0, 1.0)
 }
 
+pub static WEIERSTRASS_TEST_FUNCTIONS: Lazy<BTreeMap<String, TestFunction>> = Lazy::new(|| {
+    let mut m = BTreeMap::new();
+    m.insert(
+        "shifted_weierstrass".to_string(),
+        TestFunction {
+            func: shifted_weierstrass,
+            bounds: SHIFTED_WEIERSTRASS_BOUNDS,
+        },
+    );
+    m
+});
+
+/// Easy unimodal functions — small popsize, high sigma
+pub static EASY_TEST_FUNCTIONS: Lazy<BTreeMap<String, TestFunction>> = Lazy::new(|| {
+    let mut m = BTreeMap::new();
+    m.insert("shifted_sphere".to_string(), TestFunction { func: shifted_sphere, bounds: SHIFTED_SPHERE_BOUNDS });
+    m.insert("sphere".to_string(), TestFunction { func: sphere, bounds: SPHERE_BOUNDS });
+    m.insert("ellipsoid".to_string(), TestFunction { func: ellipsoid, bounds: ELLIPSOID_BOUNDS });
+    m.insert("discus".to_string(), TestFunction { func: discus, bounds: DISCUS_BOUNDS });
+    m.insert("different_powers".to_string(), TestFunction { func: different_powers, bounds: DIFFERENT_POWERS_BOUNDS });
+    m.insert("rosenbrock".to_string(), TestFunction { func: rosenbrock, bounds: ROSENBROCK_BOUNDS });
+    m
+});
+
+/// Hard multimodal functions — large popsize, lower sigma
+pub static HARD_TEST_FUNCTIONS: Lazy<BTreeMap<String, TestFunction>> = Lazy::new(|| {
+    let mut m = BTreeMap::new();
+    m.insert("forest".to_string(), TestFunction { func: forest, bounds: FOREST_BOUNDS });
+    m.insert("shifted_weierstrass".to_string(), TestFunction { func: shifted_weierstrass, bounds: SHIFTED_WEIERSTRASS_BOUNDS });
+    m.insert("hilly".to_string(), TestFunction { func: hilly, bounds: HILLY_BOUNDS });
+    m.insert("megacity".to_string(), TestFunction { func: megacity, bounds: MEGACITY_BOUNDS });
+    m
+});
+
+pub static HARD_DISCRETE_FUNCTIONS: Lazy<BTreeMap<String, TestFunction>> = Lazy::new(|| {
+    let mut m = BTreeMap::new();
+    m.insert("megacity".to_string(), TestFunction { func: megacity, bounds: MEGACITY_BOUNDS });
+    m
+});
+
+pub static MEDIUM_PERIODIC_FUNCTIONS: Lazy<BTreeMap<String, TestFunction>> = Lazy::new(|| {
+    let mut m = BTreeMap::new();
+    m.insert("shubert".to_string(), TestFunction { func: shubert, bounds: SHUBERT_BOUNDS });
+    m
+});
+
 pub static MINI_TEST_FUNCTIONS: Lazy<BTreeMap<String, TestFunction>> = Lazy::new(|| {
     let mut m = BTreeMap::new();
     m.insert(
@@ -194,6 +255,25 @@ pub static MINI_TEST_FUNCTIONS: Lazy<BTreeMap<String, TestFunction>> = Lazy::new
             bounds: SHIFTED_SPHERE_BOUNDS,
         },
     );
+    m.insert(
+        "hilly".to_string(),
+        TestFunction {
+            func: hilly,
+            bounds: HILLY_BOUNDS,
+        },
+    );
+    m.insert(
+        "forest".to_string(),
+        TestFunction {
+            func: forest,
+            bounds: FOREST_BOUNDS,
+        },
+    );
+    m
+});
+
+pub static TERRAIN_TEST_FUNCTIONS: Lazy<BTreeMap<String, TestFunction>> = Lazy::new(|| {
+    let mut m = BTreeMap::new();
     m.insert(
         "hilly".to_string(),
         TestFunction {
@@ -359,6 +439,17 @@ mod tests {
         let funcs = &*MINI_TEST_FUNCTIONS;
         assert_eq!(funcs.len(), 3);
         assert!(funcs.contains_key("shifted_sphere"));
+        assert!(funcs.contains_key("hilly"));
+        assert!(funcs.contains_key("forest"));
+        for (_, tf) in funcs {
+            let _ = (tf.func)(Vec8::splat(0.0), Vec8::splat(0.0));
+        }
+    }
+
+    #[test]
+    fn test_medium_test_functions() {
+        let funcs = &*TERRAIN_TEST_FUNCTIONS;
+        assert_eq!(funcs.len(), 2);
         assert!(funcs.contains_key("hilly"));
         assert!(funcs.contains_key("forest"));
         for (_, tf) in funcs {

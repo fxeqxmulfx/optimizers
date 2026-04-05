@@ -1,4 +1,5 @@
 pub mod algorithms;
+pub mod benchmark_params;
 pub mod default_algorithms_params;
 pub mod early_stop_callback;
 pub mod functions;

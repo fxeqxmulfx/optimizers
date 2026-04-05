@@ -207,6 +207,12 @@ pub struct ZeroGradient {
     pub init_jump: f32,
 }
 
+pub fn new_zero_gradient(params: &std::collections::BTreeMap<String, f32>) -> ZeroGradient {
+    ZeroGradient {
+        init_jump: params["init_jump"],
+    }
+}
+
 impl Optimizer for ZeroGradient {
     fn find_infimum<F>(
         &self,

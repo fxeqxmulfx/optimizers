@@ -87,31 +87,16 @@ impl BoundsSimd {
     /// `out` must have length >= `self.output_len()`.
     #[inline]
     pub fn transform_into(&self, values: &[f32], out: &mut [Vec8]) {
+        let ranges = &self.ranges[..self.groups * 2];
+        let mins = &self.mins[..self.groups * 2];
+        let out = &mut out[..self.groups * 2];
         for g in 0..self.groups {
-            let base = g * 16;
+            let v = &values[g * 16..g * 16 + 16];
             let pair = g * 2;
-            let vals_lo = Vec8::from([
-                values[base],
-                values[base + 1],
-                values[base + 2],
-                values[base + 3],
-                values[base + 4],
-                values[base + 5],
-                values[base + 6],
-                values[base + 7],
-            ]);
-            let vals_hi = Vec8::from([
-                values[base + 8],
-                values[base + 9],
-                values[base + 10],
-                values[base + 11],
-                values[base + 12],
-                values[base + 13],
-                values[base + 14],
-                values[base + 15],
-            ]);
-            let f_lo = vals_lo.mul_add(self.ranges[pair], self.mins[pair]);
-            let f_hi = vals_hi.mul_add(self.ranges[pair + 1], self.mins[pair + 1]);
+            let vals_lo = Vec8::from([v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7]]);
+            let vals_hi = Vec8::from([v[8], v[9], v[10], v[11], v[12], v[13], v[14], v[15]]);
+            let f_lo = vals_lo.mul_add(ranges[pair], mins[pair]);
+            let f_hi = vals_hi.mul_add(ranges[pair + 1], mins[pair + 1]);
             out[pair] = Vec8([
                 f_lo[0], f_lo[2], f_lo[4], f_lo[6], f_hi[0], f_hi[2], f_hi[4], f_hi[6],
             ]);

@@ -40,124 +40,121 @@ impl Optimizer for ANSR {
     where
         F: Fn(&[Vec8]) -> f32 + Sync,
     {
-        let params = bounds.len();
+        let dims = bounds.len();
         let popsize = self.popsize;
         let max_epoch = f64::ceil(maxiter as f64 / popsize as f64) as u64;
-        let mut range_min: Vec<f32> = vec![0.0; params];
-        let mut range_max: Vec<f32> = vec![0.0; params];
-        for i in 0..params {
+        let mut range_min: Vec<f32> = vec![0.0; dims];
+        let mut range_max: Vec<f32> = vec![0.0; dims];
+        for i in 0..dims {
             range_min[i] = bounds[i][0];
             range_max[i] = bounds[i][1];
         }
         let bounds_simd = BoundsSimd::new(&range_min, &range_max);
         let mut simd_buf = vec![Vec8::ZERO; bounds_simd.output_len()];
-        let mut current_positions: Vec<Vec<f32>> = vec![vec![0.0; params]; popsize];
         let mut rng: Pcg64Mcg = SeedableRng::seed_from_u64(seed);
         let random = Uniform::new_inclusive(0.0, 1.0).unwrap();
-        for p in 0..popsize {
-            for d in 0..params {
-                current_positions[p][d] = random.sample(&mut rng);
-            }
-        }
-        let mut best_positions: Vec<Vec<f32>> = vec![vec![0.0; params]; popsize];
-        let mut best_residuals: Vec<f32> = vec![f32::INFINITY; popsize];
+
+        // Flat storage: popsize * dims
+        let mut cur = vec![0.0f32; popsize * dims];
+        for v in &mut cur { *v = random.sample(&mut rng); }
+        let mut best = vec![0.0f32; popsize * dims];
+        let mut best_f = vec![f32::INFINITY; popsize];
+        let mut cur_f = vec![f32::INFINITY; popsize];
+
         let restart_tolerance = self.restart_tolerance;
         let sigma = self.sigma;
         let normal = Normal::new(0.0, sigma).unwrap();
-        let mut current_residuals: Vec<f32> = vec![f32::INFINITY; popsize];
         let mut ind = 0;
         let stop_residual = early_stop_callback.stop_residual();
-        let mut history = OptimizationHistory {
-            x: Vec::new(),
-            f_x: Vec::new(),
-        };
+        let mut history = OptimizationHistory { x: Vec::new(), f_x: Vec::new() };
         if use_history {
-            history.x.push(current_positions.clone());
-            history.f_x.push(current_residuals.clone());
+            history.x.push((0..popsize).map(|p| cur[p*dims..(p+1)*dims].to_vec()).collect());
+            history.f_x.push(cur_f.clone());
         }
         let mut current_epoch = 0;
         let popsize_distr = Uniform::new(0, popsize).unwrap();
         let self_instead_neighbour = self.self_instead_neighbour;
+
         for epoch in 0..max_epoch {
             for p in 0..popsize {
-                bounds_simd.transform_into(&current_positions[p], &mut simd_buf);
-                current_residuals[p] = func(&simd_buf);
+                bounds_simd.transform_into(&cur[p*dims..(p+1)*dims], &mut simd_buf);
+                cur_f[p] = func(&simd_buf);
             }
             for p in 0..popsize {
-                if current_residuals[p] < best_residuals[p] {
-                    best_residuals[p] = current_residuals[p];
-                    best_positions[p].copy_from_slice(&current_positions[p]);
-                    if best_residuals[p] < best_residuals[ind] {
+                if cur_f[p] < best_f[p] {
+                    best_f[p] = cur_f[p];
+                    best[p*dims..(p+1)*dims].copy_from_slice(&cur[p*dims..(p+1)*dims]);
+                    if best_f[p] < best_f[ind] {
                         ind = p;
                     }
                 }
             }
             if use_history {
-                history.x.push(best_positions.clone());
-                history.f_x.push(best_residuals.clone());
+                history.x.push((0..popsize).map(|p| best[p*dims..(p+1)*dims].to_vec()).collect());
+                history.f_x.push(best_f.clone());
             }
             current_epoch = epoch;
-            if best_residuals[ind] <= stop_residual {
+            if best_f[ind] <= stop_residual {
                 break;
             }
             for lhs in 0..popsize {
-                if best_residuals[lhs] == f32::INFINITY {
+                if best_f[lhs] == f32::INFINITY {
                     continue;
                 }
                 for rhs in (lhs + 1)..popsize {
-                    if best_residuals[rhs] == f32::INFINITY {
+                    if best_f[rhs] == f32::INFINITY {
                         continue;
                     }
-                    let (min_residual, max_residual) = if best_residuals[lhs] <= best_residuals[rhs] {
-                        (best_residuals[lhs], best_residuals[rhs])
+                    let (min_residual, max_residual) = if best_f[lhs] <= best_f[rhs] {
+                        (best_f[lhs], best_f[rhs])
                     } else {
-                        (best_residuals[rhs], best_residuals[lhs])
+                        (best_f[rhs], best_f[lhs])
                     };
                     if max_residual != 0.0
                         && (max_residual - min_residual) / max_residual < restart_tolerance
                     {
-                        let loser = if lhs == ind || (rhs != ind && best_residuals[lhs] < best_residuals[rhs]) {
+                        let loser = if lhs == ind || (rhs != ind && best_f[lhs] < best_f[rhs]) {
                             rhs
                         } else {
                             lhs
                         };
-                        best_residuals[loser] = f32::INFINITY;
-                        for d in 0..params {
-                            best_positions[loser][d] = random.sample(&mut rng);
-                            current_positions[loser][d] = random.sample(&mut rng);
+                        best_f[loser] = f32::INFINITY;
+                        let lo = loser * dims;
+                        for d in 0..dims {
+                            best[lo + d] = random.sample(&mut rng);
+                            cur[lo + d] = random.sample(&mut rng);
                         }
                     }
                 }
             }
             for p in 0..popsize {
-                for d in 0..params {
+                let po = p * dims;
+                for d in 0..dims {
                     if random.sample(&mut rng) <= self_instead_neighbour {
-                        current_positions[p][d] = clamp_to_unit_cube(
-                            best_positions[p][d]
+                        cur[po + d] = clamp_to_unit_cube(
+                            best[po + d]
                                 + normal.sample(&mut rng)
-                                    * f32::abs(best_positions[p][d] - current_positions[p][d]),
+                                    * f32::abs(best[po + d] - cur[po + d]),
                         )
                     } else {
                         let mut r = popsize_distr.sample(&mut rng);
-                        while r == p {
-                            r = popsize_distr.sample(&mut rng);
-                        }
-                        current_positions[p][d] = clamp_to_unit_cube(
-                            best_positions[r][d]
+                        while r == p { r = popsize_distr.sample(&mut rng); }
+                        let ro = r * dims;
+                        cur[po + d] = clamp_to_unit_cube(
+                            best[ro + d]
                                 + normal.sample(&mut rng)
-                                    * f32::abs(best_positions[r][d] - current_positions[p][d]),
+                                    * f32::abs(best[ro + d] - cur[po + d]),
                         )
                     }
                 }
             }
         }
-        let result = OptimizerResult {
-            x: fit_in_bounds(&best_positions[ind], &range_min, &range_max),
-            f_x: best_residuals[ind],
+        OptimizerResult {
+            x: fit_in_bounds(&best[ind*dims..(ind+1)*dims], &range_min, &range_max),
+            f_x: best_f[ind],
             nfev: (current_epoch + 1) * popsize as u64,
             history: if use_history { Some(history) } else { None },
-        };
-        return result;
+        }
     }
 }
 

@@ -1,0 +1,917 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{hyperref}
+% algorithm/algpseudocode not available; pseudocode inlined as verbatim
+% \usepackage{multirow} % not available
+\usepackage{xcolor}
+\usepackage{float}
+
+\title{Extending Across Neighbourhood Search with Restarts:\\A Simple Mechanism That Works and a Complex One That Does Not}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Across Neighbourhood Search (ANS) is a population-based optimizer where individuals search the neighbourhoods of multiple superior solutions guided by Gaussian perturbations. While effective on unimodal problems, ANS lacks a mechanism to escape local optima when multiple particles converge to the same basin. I propose ANSR, a minimal extension that adds pairwise restart detection: when two particles reach similar fitness values, the worse one is reset to a random position. On the Shubert function, this single change improves the success rate from 77.5\% (155/200) to 100\% at 64 dimensions. I also investigate ANSR~DPNM, a more complex variant with cosine sigma annealing, power-law restart decay, opposition-based reinitialization, and toroidal boundary handling with asymmetric neighbour scaling. Despite its additional degrees of freedom, DPNM consistently underperforms plain ANSR---failing entirely on Shubert at 64D and on terrain functions at 256D. All six algorithms (ANS, ANSR, ANSR~DPNM, DE, SHADE, Zero-Gradient) are benchmarked on four problem groups spanning 16--1024 dimensions with 200 independent runs per configuration. Results confirm that the restart mechanism is the single most impactful modification to ANS, and that additional adaptive complexity does not improve performance.
+\end{abstract}
+
+\section{Introduction}
+
+Across Neighbourhood Search (ANS), proposed by Wu~\cite{wu2015ans}, is a population-based search algorithm in which each individual searches across the neighbourhoods of multiple superior solutions using Gaussian perturbations. ANS is notable for its simplicity: it requires only three parameters (population size $m$, across-search degree $n$, and perturbation scale $\sigma$) and the principle behind it---that better solutions are likely found near known good solutions---is intuitive.
+
+However, ANS has a structural weakness. When multiple particles converge to the same local optimum, they continue to search the same neighbourhood indefinitely. On unimodal functions this is harmless, but on multimodal landscapes it leads to premature convergence.
+
+This paper makes two contributions:
+\begin{enumerate}
+    \item I propose \textbf{ANSR} (ANS with Restarts), which adds a pairwise convergence detection and restart mechanism. When two particles reach similar fitness values (relative difference below a threshold $\tau$), the worse particle is reset to a random position. This is the minimal change needed to prevent population collapse on multimodal problems.
+    \item I report a \textbf{negative result} for \textbf{ANSR~DPNM} (Decay Power, Neighbour Multiplier), a more complex variant with cosine sigma annealing, power-law restart tolerance decay, opposition-based reinitialization, and toroidal boundary handling with asymmetric neighbour scaling. Despite having two additional parameters, DPNM consistently underperforms plain ANSR.
+\end{enumerate}
+
+I benchmark all algorithms against DE~\cite{storn1997de} and SHADE~\cite{tanabe2013shade} as established baselines, and Zero-Gradient descent as a gradient-free reference. Per-group hyperparameter tuning is performed via grid search, and results are reported over 200 independent runs.
+
+\section{Background: ANS}
+
+I briefly describe the original ANS algorithm following Wu~\cite{wu2015ans}. A population of $m$ individuals searches a $D$-dimensional space. Each individual $i$ maintains a current position $\mathbf{pos}_i$ and a personal best (superior solution) $\mathbf{r}_i$. The collection of all superior solutions is $R = \{r_1, \ldots, r_m\}$.
+
+At each generation, for each individual $i$ and each dimension $d$, the position is updated as:
+\begin{equation}
+    \text{pos}_i^d = \begin{cases}
+        r_i^d + \mathcal{N}(0, \sigma^2) \cdot |r_i^d - \text{pos}_i^d| & \text{if } d \notin N \\
+        r_{g(d)}^d + \mathcal{N}(0, \sigma^2) \cdot |r_{g(d)}^d - \text{pos}_i^d| & \text{if } d \in N
+    \end{cases}
+    \label{eq:ans_update}
+\end{equation}
+where $N$ is a randomly selected set of $n$ dimensions (the \emph{across-search degree}), and $g(d) \neq i$ is a randomly selected individual whose superior solution guides the search on dimension $d$.
+
+The three parameters are:
+\begin{itemize}
+    \item $m$: population size (equal to the cardinality of $R$)
+    \item $n$: across-search degree ($0 \leq n \leq D$), controlling how many dimensions learn from neighbours vs self
+    \item $\sigma$: standard deviation of the Gaussian perturbation
+\end{itemize}
+
+\subsection{My Implementation}
+
+My implementation replaces the discrete across-search degree $n$ with a continuous probability $p_{\text{self}} \in [0, 1]$: for each dimension independently, with probability $p_{\text{self}}$ the particle perturbs around its own best, and with probability $1 - p_{\text{self}}$ it perturbs around a random neighbour's best. This is equivalent to Wu's formulation with $n/D = 1 - p_{\text{self}}$ in expectation but avoids the need to sample a fixed-size subset of dimensions. All operations are performed in the unit cube $[0, 1]^D$ and mapped to the original bounds only for function evaluation.
+
+\bigskip
+\noindent\textbf{Algorithm 1: ANS}
+\label{alg:ans}
+
+\smallskip
+\noindent\fbox{\parbox{0.95\columnwidth}{
+\small
+\textbf{Initialize} population $\mathbf{pos}_1, \ldots, \mathbf{pos}_m$ uniformly in $[0,1]^D$ \\
+\textbf{Set} $\mathbf{r}_i \gets \mathbf{pos}_i$, $f(\mathbf{r}_i) \gets \infty$ for all $i$ \\
+\textbf{For} epoch $= 1$ to MaxEpoch: \\
+\quad \textbf{For} $i = 1$ to $m$: \hfill \textit{// Evaluate} \\
+\quad\quad $f_i \gets f(\text{map}(\mathbf{pos}_i))$ \\
+\quad\quad \textbf{If} $f_i < f(\mathbf{r}_i)$: update $\mathbf{r}_i \gets \mathbf{pos}_i$, update global best \\
+\quad \textbf{For} $i = 1$ to $m$, $d = 1$ to $D$: \hfill \textit{// Perturbation} \\
+\quad\quad \textbf{If} $\text{rand}() \leq p_{\text{self}}$: $\text{pos}_i^d \gets \text{clamp}(r_i^d + \mathcal{N}(0,\sigma^2) \cdot |r_i^d - \text{pos}_i^d|)$ \\
+\quad\quad \textbf{Else}: sample $k \neq i$; $\text{pos}_i^d \gets \text{clamp}(r_k^d + \mathcal{N}(0,\sigma^2) \cdot |r_k^d - \text{pos}_i^d|)$
+}}
+
+\section{Proposed Modifications}
+
+\subsection{ANSR --- ANS with Restarts}
+
+ANSR adds a single mechanism to ANS: pairwise convergence detection with random restart. After each generation, all pairs of particles are compared. If two particles $i$ and $j$ have converged to similar fitness:
+\begin{equation}
+    \frac{|f_{\max} - f_{\min}|}{|f_{\max}|} < \tau
+    \label{eq:restart_condition}
+\end{equation}
+where $f_{\min}$ and $f_{\max}$ are the smaller and larger of $f(r_i)$ and $f(r_j)$, the worse particle is reset: both its current position and personal best are resampled uniformly in $[0, 1]^D$, and its best fitness is reset to $\infty$.
+
+The restart tolerance $\tau$ is the only additional parameter beyond ANS. In my experiments, $\tau = 10^{-8}$ works well across all test groups, making ANSR effectively a three-parameter algorithm (since $\tau$ does not require per-problem tuning).
+
+\bigskip
+\noindent\textbf{Algorithm 2: ANSR (ANS with Restarts)}
+\label{alg:ansr}
+
+\smallskip
+\noindent\fbox{\parbox{0.95\columnwidth}{
+\small
+\textbf{Initialize} population $\mathbf{pos}_1, \ldots, \mathbf{pos}_m$ uniformly in $[0,1]^D$ \\
+\textbf{Set} $\mathbf{r}_i \gets \mathbf{pos}_i$, $f(\mathbf{r}_i) \gets \infty$ for all $i$ \\
+\textbf{For} epoch $= 1$ to MaxEpoch: \\
+\quad \textbf{For} $i = 1$ to $m$: \hfill \textit{// Evaluate} \\
+\quad\quad $f_i \gets f(\text{map}(\mathbf{pos}_i))$ \\
+\quad\quad \textbf{If} $f_i < f(\mathbf{r}_i)$: update $\mathbf{r}_i \gets \mathbf{pos}_i$, update global best \\
+\quad \textbf{For} all pairs $(i, j)$, $i < j$: \hfill \textit{// Restart check} \\
+\quad\quad \textbf{If} condition~\eqref{eq:restart_condition} holds: reset worse particle \\
+\quad \textbf{For} $i = 1$ to $m$, $d = 1$ to $D$: \hfill \textit{// Perturbation} \\
+\quad\quad \textbf{If} $\text{rand}() \leq p_{\text{self}}$: $\text{pos}_i^d \gets \text{clamp}(r_i^d + \mathcal{N}(0,\sigma^2) \cdot |r_i^d - \text{pos}_i^d|)$ \\
+\quad\quad \textbf{Else}: sample $k \neq i$; $\text{pos}_i^d \gets \text{clamp}(r_k^d + \mathcal{N}(0,\sigma^2) \cdot |r_k^d - \text{pos}_i^d|)$
+}}
+
+\textbf{Motivation.} On unimodal functions, the restart mechanism rarely triggers because particles explore different regions of the single basin. On multimodal functions, particles that converge to the same local optimum are detected and restarted, maintaining population diversity. The pairwise comparison is $O(m^2)$ per generation but negligible in practice since $m$ is small (64 in all experiments) and the comparison involves only scalar fitness values.
+
+\subsection{ANSR DPNM --- Adaptive ANSR (Negative Result)}
+
+I also investigated a more complex variant, ANSR~DPNM, which adds four modifications:
+
+\begin{enumerate}
+    \item \textbf{Cosine sigma annealing}: $\sigma_{\text{eff}} = \sigma \cdot \tfrac{1}{2}(1 + \cos(\pi t))$ where $t = \text{epoch}/\text{MaxEpoch}$. Intended to transition from exploration to exploitation.
+    \item \textbf{Power-law restart decay}: $\tau_{\text{eff}} = \tau \cdot (1 - t)^p$ with decay power $p$. Intended to reduce restarts in later epochs when the population should be converging.
+    \item \textbf{Opposition-based restart}: When a particle is restarted, its new position is set to $1 - \mathbf{r}_{\text{better}}$ (the mirror of the surviving particle) instead of a random position. Intended to direct restarts to unexplored regions.
+    \item \textbf{Toroidal boundary handling}: Positions that leave $[0,1]$ are wrapped (modular arithmetic) instead of clamped. Combined with an asymmetric \textbf{neighbour multiplier} $m_n$ that scales the perturbation when learning from neighbours: $\sigma_{\text{neighbour}} = \sigma_{\text{eff}} \cdot (1 + m_n \cdot 2 \cdot \text{cosine}(t))$.
+\end{enumerate}
+
+This adds two parameters beyond ANSR: restart decay power $p$ and neighbour multiplier $m_n$. Despite having more adaptive mechanisms, DPNM consistently underperforms plain ANSR, as shown in Section~\ref{sec:results}.
+
+\bigskip
+\noindent\textbf{Algorithm 3: ANSR DPNM}
+\label{alg:dpnm}
+
+\smallskip
+\noindent\fbox{\parbox{0.95\columnwidth}{
+\small
+\textbf{Initialize} as Algorithm~2. \\
+\textbf{For} epoch $= 1$ to MaxEpoch: \\
+\quad $t \gets \text{epoch}/\text{MaxEpoch}$; \; $c \gets \tfrac{1}{2}(1 + \cos(\pi t))$ \\
+\quad $\sigma_{\text{eff}} \gets \sigma \cdot c$; \; $\tau_{\text{eff}} \gets \tau \cdot (1 - t)^{p}$ \\
+\quad Evaluate and update personal bests (as Algorithm~2) \\
+\quad \textbf{For} all pairs $(i, j)$, $i < j$: \hfill \textit{// Restart check} \\
+\quad\quad \textbf{If} $|f_{\max} - f_{\min}|/|f_{\max}| < \tau_{\text{eff}}$: \\
+\quad\quad\quad Set loser $\gets$ worse particle; $\mathbf{pos}_{\text{loser}}^d \gets 1 - \mathbf{r}_{\text{better}}^d$ \hfill \textit{// Reflection} \\
+\quad \textbf{For} $i = 1$ to $m$, $d = 1$ to $D$: \hfill \textit{// Perturbation} \\
+\quad\quad \textbf{If} $\text{rand}() \leq p_{\text{self}}$: \\
+\quad\quad\quad $\text{pos}_i^d \gets \text{wrap}(r_i^d + \mathcal{N}(0, \sigma_{\text{eff}}^2) \cdot |r_i^d - \text{pos}_i^d|)$ \\
+\quad\quad \textbf{Else}: sample $k \neq i$; $\sigma_n \gets \sigma_{\text{eff}} \cdot (1 + m_n \cdot 2c)$ \\
+\quad\quad\quad $\text{pos}_i^d \gets \text{wrap}(r_k^d + \mathcal{N}(0, \sigma_n^2) \cdot |r_k^d - \text{pos}_i^d|)$
+}}
+
+\section{Experimental Setup}
+
+\subsection{Benchmark Functions}
+
+I organize benchmark functions into four groups based on landscape properties (Table~\ref{tab:groups}). All functions are scaled to $[0, 1]$ output range for fair comparison.
+
+\begin{table}[h]
+\centering
+\caption{Benchmark function groups}
+\label{tab:groups}
+\begin{tabular}{@{}llll@{}}
+\toprule
+Group & Functions & Dims & Maxiter \\
+\midrule
+Easy & sphere, shifted\_sphere, & 64--1024 & 50k \\
+     & ellipsoid, discus, & & \\
+     & different\_powers, & & \\
+     & rosenbrock & & \\
+\midrule
+Medium & hilly, forest & 64, 128, 256 & 500k \\
+terrain & & & \\
+\midrule
+Medium & shubert & 16, 32, 64 & 500k \\
+periodic & & & \\
+\midrule
+Hard & megacity & 16, 32, 64 & 500k \\
+discrete & & & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Easy} functions are unimodal with a single basin of attraction. \textbf{Medium terrain} functions (hilly, forest) have complex multimodal landscapes with smooth structure. \textbf{Medium periodic} (Shubert) has a regular grid of local optima with a single global minimum---this is the key discriminator between ANS and ANSR. \textbf{Hard discrete} (megacity) is a step function with a piecewise-constant landscape that is particularly challenging for continuous optimizers.
+
+\subsection{Function Definitions}
+
+All benchmark functions take pairs of coordinates $(x_i, y_i)$ and are evaluated over $D/2$ pairs, where $D$ is the total dimensionality. Each function is scaled to the $[0, 1]$ output range using $\text{scale}(v, v_{\min}, v_{\max}) = (v - v_{\min}) / (v_{\max} - v_{\min})$.
+
+\subsubsection{Easy Functions}
+
+\newcommand{\fnrow}[2]{%
+  \begin{center}
+    \includegraphics[width=0.62\textwidth]{#1}
+  \end{center}
+  \noindent #2\par\vspace{10pt}%
+}
+
+\fnrow{figures/sphere.pdf}{%
+  \textbf{Sphere} ($[-5, 5]^2$): $f(x, y) = x^2 + y^2$. The simplest convex test function.}
+
+\fnrow{figures/shifted_sphere.pdf}{%
+  \textbf{Shifted Sphere} ($[-10, 10]^2$): $f(x, y) = (x{+}\pi)^2 + (y{+}\pi)^2$. Optimum shifted to $(-\pi,-\pi)$ to penalise algorithms that assume the origin is special.}
+
+\fnrow{figures/ellipsoid.pdf}{%
+  \textbf{Ellipsoid} ($[-5, 5]^2$): $f(x, y) = x^2 + 10^6 y^2$. Ill-conditioned unimodal function with condition number $10^6$; tests sensitivity to coordinate scaling.}
+
+\fnrow{figures/discus.pdf}{%
+  \textbf{Discus} ($[-5, 5]^2$): $f(x, y) = 10^6 x^2 + y^2$. Transpose of ellipsoid---one highly sensitive and one insensitive coordinate.}
+
+\fnrow{figures/different_powers.pdf}{%
+  \textbf{Different Powers} ($[-5, 5]^2$): $f(x, y) = x^2 + y^6$. Non-uniform curvature: the $y$ dimension has a much flatter basin near the optimum.}
+
+\fnrow{figures/rosenbrock.pdf}{%
+  \textbf{Rosenbrock} ($[-5, 5]^2$): $f(x, y) = 100(x^2 - y)^2 + (x - 1)^2$. Classic banana-shaped valley; unimodal but with a narrow curved ridge.}
+
+\subsubsection{Medium Terrain Functions}
+
+\fnrow{figures/hilly.pdf}{%
+  \textbf{Hilly} ($[-3, 3]^2$): Rastrigin base with superimposed Gaussian bumps:
+  \begin{align*}
+  f = {}& 20 + x^2 + y^2 - 10\cos(2\pi x) - 10\cos(2\pi y) \\
+  & - 30e^{-\frac{(x-1)^2+y^2}{0.1}} + 200e^{-\frac{(x+0.47\pi)^2+(y-0.2\pi)^2}{0.1}} \\
+  & + 100e^{-\frac{(x-0.5)^2+(y+0.5)^2}{0.01}} - 60e^{-\frac{(x-1.33)^2+(y-2)^2}{0.02}} \\
+  & - 40e^{-\frac{(x+1.3)^2+(y+0.2)^2}{0.5}} + 60e^{-\frac{(x-1.5)^2+(y+1.5)^2}{0.1}}
+  \end{align*}
+  Negated and scaled. Asymmetric traps of varying depth and width.}
+
+\fnrow{figures/forest.pdf}{%
+  \textbf{Forest} ($[-43.5,-39]\times[-47.35,-40]$):
+  \begin{align*}
+  f = {}&\Bigl[\sin\!\sqrt{|x{-}1.13|+|y{-}2|} + \cos\!\bigl(\sqrt{|\sin x|}+\sqrt{|\sin(y{-}2)|}\bigr) \\
+  &+ 1.01e^{-\frac{(x+42)^2+(y+43.5)^2}{0.9}} + e^{-\frac{(x+40.2)^2+(y+46)^2}{0.3}}\Bigr]^4 \\
+  &- 0.3e^{-\frac{(x+42.3)^2+(y+46)^2}{0.02}}
+  \end{align*}
+  Negated and scaled. Sharp peaks from a smooth base; narrow Gaussian well near $(-42.3,-46)$.}
+
+\subsubsection{Medium Periodic Function}
+
+\fnrow{figures/shubert.pdf}{%
+  \textbf{Shubert} ($[-10, 10]^2$):
+  \[ f(x,y) = \Bigl(\sum_{i=1}^{5} i\cos((i{+}1)x+i)\Bigr)\cdot\Bigl(\sum_{i=1}^{5} i\cos((i{+}1)y+i)\Bigr) \]
+  Product of two cosine sums; $\sim$760 local minima, global minimum $\approx -186.73$. Ideal test for restart mechanisms: without restarts, particles collapse into local minima.}
+
+\subsubsection{Hard Discrete Function}
+
+\fnrow{figures/megacity.pdf}{%
+  \textbf{Megacity} ($[-10,-2]\times[-10.5,10]$):
+  \begin{align*}
+  f = {}&\Bigl\lfloor\bigl(\sin\!\sqrt{|x{-}1.13|+|y{-}2|}+\cos(\sqrt{|\sin x|}+\sqrt{|\sin(y{-}2)|})\bigr)^4\Bigr\rfloor \\
+  &-\Bigl\lfloor 2e^{-\frac{(x+9.5)^2+(y+7.5)^2}{0.4}}\Bigr\rfloor
+  \end{align*}
+  Floor operations create a piecewise-constant step landscape. Gradient information is zero almost everywhere; global optimum occupies a tiny region.}
+
+\subsection{Algorithms}
+
+Six algorithms are compared:
+\begin{itemize}
+    \item \textbf{ANS}: Wu's original algorithm~\cite{wu2015ans}, my re-implementation. Parameters: population size $m$, sigma $\sigma$, self-path probability $p_{\text{self}}$.
+    \item \textbf{ANSR}: ANS with pairwise restart (this work). Additional parameter: restart tolerance $\tau$.
+    \item \textbf{ANSR DPNM}: Adaptive ANSR with decay and neighbour scaling (this work, negative result). Additional parameters: decay power $p$, neighbour multiplier $m_n$.
+    \item \textbf{DE}: Classic differential evolution (DE/rand/1/bin)~\cite{storn1997de}. Parameters: $m$, scaling factor $F$, crossover rate $CR$.
+    \item \textbf{SHADE}: Success-History Adaptive DE~\cite{tanabe2013shade} with current-to-pbest/1 mutation, external archive, and adaptive $F$/$CR$. Parameters: $m$, history size $H$, p-best rate.
+    \item \textbf{Zero-Gradient (ZG)}: A coordinate-wise line search baseline using doubling steps and bisection refinement. Parameter: initial jump size.
+\end{itemize}
+
+All population-based algorithms use a fixed population size of 64.
+
+\bigskip
+\noindent\textbf{Algorithm 4: DE/rand/1/bin}
+\label{alg:de}
+
+\smallskip
+\noindent\fbox{\parbox{0.95\columnwidth}{
+\small
+\textbf{Initialize} population $\mathbf{x}_1, \ldots, \mathbf{x}_m$ uniformly in $[0,1]^D$; evaluate all. \\
+\textbf{For} epoch $= 1$ to MaxEpoch: \\
+\quad \textbf{For} $i = 1$ to $m$: \hfill \textit{// Mutation + crossover} \\
+\quad\quad Select $r_1, r_2, r_3 \neq i$ uniformly at random \\
+\quad\quad $j_{\text{rand}} \gets \text{randint}(1, D)$ \\
+\quad\quad \textbf{For} $d = 1$ to $D$: \\
+\quad\quad\quad \textbf{If} $d = j_{\text{rand}}$ or $\text{rand}() < CR$: \\
+\quad\quad\quad\quad $\text{trial}_i^d \gets \text{clamp}(x_{r_1}^d + F \cdot (x_{r_2}^d - x_{r_3}^d))$ \\
+\quad\quad\quad \textbf{Else}: $\text{trial}_i^d \gets x_i^d$ \\
+\quad Evaluate all trials \\
+\quad \textbf{For} $i = 1$ to $m$: \hfill \textit{// Selection} \\
+\quad\quad \textbf{If} $f(\text{trial}_i) \leq f(\mathbf{x}_i)$: $\mathbf{x}_i \gets \text{trial}_i$
+}}
+
+\bigskip
+\noindent\textbf{Algorithm 5: SHADE}
+\label{alg:shade}
+
+\smallskip
+\noindent\fbox{\parbox{0.95\columnwidth}{
+\small
+\textbf{Initialize} population $\mathbf{x}_1, \ldots, \mathbf{x}_m$ in $[0,1]^D$; archive $A \gets \emptyset$ \\
+\textbf{Initialize} history $M_F[1..H] \gets 0.5$, $M_{CR}[1..H] \gets 0.5$; $k \gets 1$ \\
+\textbf{For} epoch $= 1$ to MaxEpoch: \\
+\quad $S_F \gets \emptyset$; $S_{CR} \gets \emptyset$; $S_\Delta \gets \emptyset$ \\
+\quad Sort population by fitness; let $\mathbf{x}_{[j]}$ denote the $j$-th best \\
+\quad \textbf{For} $i = 1$ to $m$: \hfill \textit{// current-to-pbest/1} \\
+\quad\quad $r \gets \text{randint}(1, H)$; \;
+       $F_i \sim \text{Cauchy}(M_F[r],\, 0.1)$; \;
+       $CR_i \sim \mathcal{N}(M_{CR}[r],\, 0.1^2)$ \\
+\quad\quad $p_i \sim U(p_{\min}, p_{\max})$; \; select $\mathbf{x}_{\text{pbest}}$ from top $\lceil m \cdot p_i \rceil$ \\
+\quad\quad Select $r_1 \neq i$ from pop; $r_2 \neq i, r_1$ from pop $\cup\, A$ \\
+\quad\quad $\mathbf{v}_i \gets \mathbf{x}_i + F_i(\mathbf{x}_{\text{pbest}} - \mathbf{x}_i) + F_i(\mathbf{x}_{r_1} - \mathbf{x}_{r_2})$ \\
+\quad\quad Binomial crossover with $CR_i$ and $j_{\text{rand}}$ $\to$ $\text{trial}_i$ \\
+\quad Evaluate all trials \\
+\quad \textbf{For} $i = 1$ to $m$: \hfill \textit{// Selection + archive} \\
+\quad\quad \textbf{If} $f(\text{trial}_i) < f(\mathbf{x}_i)$: \\
+\quad\quad\quad $A \gets A \cup \{\mathbf{x}_i\}$; record $S_F, S_{CR}, S_\Delta$ \\
+\quad\quad \textbf{If} $f(\text{trial}_i) \leq f(\mathbf{x}_i)$: $\mathbf{x}_i \gets \text{trial}_i$ \\
+\quad \textbf{If} $S_F \neq \emptyset$: \hfill \textit{// History update} \\
+\quad\quad Weights $w_j \gets \Delta_j / \sum \Delta$; \;
+       $M_F[k] \gets \sum w_j F_j^2 / \sum w_j F_j$ \\
+\quad\quad $M_{CR}[k] \gets \sum w_j CR_j$; \;
+       $k \gets (k \bmod H) + 1$
+}}
+
+\bigskip
+\noindent\textbf{Algorithm 6: Zero-Gradient}
+\label{alg:zg}
+
+\smallskip
+\noindent\fbox{\parbox{0.95\columnwidth}{
+\small
+\textbf{Initialize} $\mathbf{x}$ uniformly in $[0,1]^D$; evaluate $f(\mathbf{x})$. \\
+\textbf{For} $d = 1$ to $D$: \hfill \textit{// Coordinate-wise descent} \\
+\quad Evaluate $f(\mathbf{x} - \delta\,\mathbf{e}_d)$ and $f(\mathbf{x} + \delta\,\mathbf{e}_d)$ where $\delta$ = init\_jump \\
+\quad \textbf{If} neither improves: skip to next $d$ \\
+\quad $s \gets \pm 1$ (direction of improvement) \\
+\quad \textbf{Doubling}: $\mu \gets 2$ \hfill \textit{// Exponential expansion} \\
+\quad\quad \textbf{While} $f(\text{clamp}(x_d + \delta \mu s)) < f(\mathbf{x})$: accept; $\mu \gets 2\mu$ \\
+\quad \textbf{Bisection}: $\mu \gets \mu / 2$ \hfill \textit{// Refinement} \\
+\quad\quad \textbf{While} $\mu \cdot \delta > \varepsilon$: \\
+\quad\quad\quad Probe $x_d \pm \mu \cdot \delta$; move to better side; $\mu \gets \mu / 2$
+}}
+
+\subsection{Parameter Tuning}
+\label{sec:tuning}
+
+For each algorithm, test group, and dimensionality, I perform grid search over the parameter space with 10 independent runs per configuration. The best configuration (lowest mean nfev across functions; a function scores $\infty$ if any of the 10 seeds fails to converge) is selected independently for each (test group, dimension) pair. The tune and benchmark use the same functions, dimensions, and maxiter; only the seed count differs (10 for tuning, 200 for benchmark).
+
+\subsubsection{Tuned Parameters for ANS/ANSR}
+
+Table~\ref{tab:params_ans} shows the tuned $\sigma$ and $p_{\text{self}}$ for ANS and ANSR across test groups. The restart tolerance $\tau = 10^{-8}$ is fixed for ANSR in all cases. The grid covers $\sigma \in \{0.04, 0.08, \ldots, 0.96\}$ (24 values) and $p_{\text{self}} \in \{0.00, 0.04, \ldots, 0.96\}$ (25 values), giving 600 combinations per algorithm; rows where ANS and ANSR share identical parameters are merged.
+
+\begin{table}[ht]
+\centering
+\caption{Tuned ANS and ANSR parameters per test group and dimension. $m = 64$, $\tau = 10^{-8}$ (ANSR only). Rows merged where ANS = ANSR.}
+\label{tab:params_ans}
+\begin{tabular}{@{}lllrr@{}}
+\toprule
+Group & Dim & Alg & $\sigma$ & $p_{\text{self}}$ \\
+\midrule
+Easy & 64--256 & ANS/ANSR & 0.12 & 0.00 \\
+Easy & 512     & ANS/ANSR & 0.12 & 0.04 \\
+Easy & 1024    & ANS/ANSR & 0.16 & 0.16 \\
+\midrule
+Terrain & 64  & ANS/ANSR & 0.32 & 0.92 \\
+Terrain & 128 & ANS      & 0.36 & 0.92 \\
+        &     & ANSR     & 0.28 & 0.92 \\
+Terrain & 256 & ANS      & 0.32 & 0.96 \\
+        &     & ANSR     & 0.36 & 0.96 \\
+\midrule
+Periodic & 16 & ANS      & 0.04 & 0.24 \\
+         &    & ANSR     & 0.04 & 0.00 \\
+Periodic & 32 & ANS      & 0.04 & 0.40 \\
+         &    & ANSR     & 0.04 & 0.04 \\
+Periodic & 64 & ANS      & 0.04 & 0.56 \\
+         &    & ANSR     & 0.04 & 0.00 \\
+\midrule
+Discrete & 16    & ANS      & 0.20 & 0.80 \\
+         &       & ANSR     & 0.04 & 0.00 \\
+Discrete & 32--64 & ANS/ANSR & 0.04 & 0.00 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Tuned Parameters for DE and SHADE}
+
+\begin{table}[H]
+\centering
+\caption{Tuned DE and SHADE parameters per test group. $m = 64$ in all cases.}
+\label{tab:params_de}
+\begin{tabular}{@{}llrrlrr@{}}
+\toprule
+ & & \multicolumn{2}{c}{DE} & & \multicolumn{2}{c}{SHADE} \\
+\cmidrule{3-4} \cmidrule{6-7}
+Group & Dim & $F$ & $CR$ & & $H$ & $p_{\text{best}}$ \\
+\midrule
+Easy & 64 & 0.12 & 0.60 & & 1 & 0.28 \\
+Easy & 128 & 0.12 & 0.60 & & 1 & 0.72 \\
+Easy & 256 & 0.12 & 0.52 & & 9 & 0.52 \\
+Easy & 512 & 0.12 & 0.44 & & 24 & 0.76 \\
+Easy & 1024 & 0.12 & 0.32 & & 1 & 0.04 \\
+\midrule
+Terrain & 64 & 0.20 & 0.12 & & 24 & 0.08 \\
+Terrain & 128 & 0.32 & 0.08 & & 1 & 0.04 \\
+Terrain & 256 & 0.24 & 0.04 & & 1 & 0.04 \\
+\midrule
+Periodic & 16--64 & 0.04 & 0.00 & & 2--14 & 0.08--0.12 \\
+\midrule
+Discrete & 16 & 0.56 & 0.40 & & 16 & 0.20 \\
+Discrete & 32 & 0.52 & 0.40 & & 22 & 0.32 \\
+Discrete & 64 & 0.64 & 0.16 & & 1 & 0.04 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Tuned Parameters for ANSR DPNM}
+
+\begin{table}[H]
+\centering
+\caption{Tuned ANSR DPNM parameters per test group. $m = 64$, $\tau = 10^{-8}$, $p = 2.0$ (restart decay power) in all cases.}
+\label{tab:params_dpnm}
+\begin{tabular}{@{}llrrr@{}}
+\toprule
+Group & Dim & $\sigma$ & $p_{\text{self}}$ & $m_n$ \\
+\midrule
+Easy & 64   & 0.20 & 0.40 & 0.50 \\
+Easy & 128--256 & 0.20 & 0.60 & 0.50 \\
+Easy & 512  & 0.20 & 0.80 & 0.50 \\
+Easy & 1024 & 0.20 & 0.60 & 0.50 \\
+\midrule
+Terrain & 64  & 0.20 & 0.80 & 0.75 \\
+Terrain & 128 & 0.20 & 0.80 & 0.50 \\
+Terrain & 256 & 0.20 & 0.00 & 0.50 \\
+\midrule
+Periodic & 16 & 0.20 & 0.20 & 0.50 \\
+Periodic & 32 & 0.20 & 0.60 & 0.50 \\
+Periodic & 64 & 0.20 & 0.00 & 0.50 \\
+\midrule
+Discrete & 16--64 & 0.20 & 0.00 & 0.50 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Tuned Parameters for Zero-Gradient}
+
+Zero-Gradient has a single parameter: the initial jump size $\delta$. The tuner selected $\delta = 0.20$ for easy 64D and $\delta = 0.25$ for easy 128--1024D. On all other test groups (terrain, periodic, discrete), Zero-Gradient failed to converge on any configuration; the tuner returned $\delta = 10^{-8}$ (the smallest grid value) by default.
+
+\subsubsection{Parameter Regime Analysis}
+
+The tuned parameters reveal three distinct regimes that reflect the fundamental differences between problem classes:
+
+\textbf{Easy (convex/unimodal)}: ANS/ANSR use $\sigma = 0.12$--$0.16$ with $p_{\text{self}} \approx 0$ (almost pure social learning). On a unimodal landscape, every neighbour's best is informative---they all point toward the same global basin. Social learning effectively averages information from multiple particles exploring different parts of the basin, accelerating convergence. The moderate $\sigma$ allows efficient refinement without overshooting. DE uses low $F = 0.12$ (small mutations) with high $CR$ that decreases with dimension (0.60 at 64D $\to$ 0.32 at 1024D), indicating that at higher dimensions fewer coordinates should be perturbed simultaneously. SHADE uses $H = 1$ at 64--128D, increasing to $H = 9$--$24$ at 256--512D before dropping to $H = 1$ at 1024D (where SHADE fails regardless).
+
+\textbf{Medium terrain (multimodal, smooth)}: ANS/ANSR switch to $\sigma = 0.28$--$0.36$ with $p_{\text{self}} = 0.92$--$0.96$ (almost pure individual learning). This is the opposite of the easy regime. On a multimodal landscape, a random neighbour is likely stuck in a different local optimum, so following its best would pull the particle away from its own promising basin. High $p_{\text{self}}$ keeps each particle focused on its own neighbourhood while the large $\sigma$ provides enough perturbation to escape shallow local optima. DE uses low $CR = 0.04$--$0.12$, perturbing very few dimensions per trial---consistent with the idea that large simultaneous changes are destructive on rugged terrain.
+
+\textbf{Medium periodic (Shubert)}: ANS/ANSR use very low $\sigma = 0.04$ with $p_{\text{self}} \approx 0$ (social). The Shubert landscape has a regular grid of narrow local optima separated by steep ridges. A large $\sigma$ would cause most perturbations to jump across ridges randomly, wasting evaluations. Instead, the small $\sigma$ keeps particles within their current basin, while the social learning ($p_{\text{self}} \approx 0$) allows information sharing. The restart mechanism (ANSR) is critical here: it is the only mechanism that allows particles to leave a local optimum, and it does so by resetting to a completely random position rather than perturbing within the current basin. This explains why ANS (without restarts) degrades: social learning alone cannot escape when all neighbours are trapped in local optima. DE uses $F = 0.04$, $CR = 0.00$, meaning only the mandatory $j_{\text{rand}}$ dimension is mutated---an extreme conservative strategy matching the narrow-basin structure.
+
+\textbf{Hard discrete (megacity)}: The step landscape breaks the assumptions of all gradient-like methods. ANS/ANSR use low $\sigma = 0.04$ with $p_{\text{self}} = 0$ at 32--64D, but the Gaussian perturbation scaled by $|r_d - \text{pos}_d|$ still fails because the distance information is uninformative on a flat landscape. DE uses high $F = 0.52$--$0.64$ with moderate $CR = 0.16$--$0.40$---large mutations that can jump across steps, which is the only effective strategy.
+
+\textbf{Key insight}: The $p_{\text{self}}$ parameter acts as a switch between two fundamentally different search modes. On unimodal problems, social learning ($p_{\text{self}} \approx 0$) is optimal because all particles share a single basin. On multimodal problems, individual learning ($p_{\text{self}} \approx 1$) is optimal because neighbours are in different basins. This binary nature suggests that $p_{\text{self}}$ could potentially be set automatically based on population diversity metrics, though I did not explore this direction.
+
+\subsection{Benchmark Protocol}
+
+Final benchmarks use \textbf{200 independent runs} per algorithm per function per dimensionality. A run is considered successful if it achieves a residual $f(\mathbf{x}) \leq 0.01$. I report the \textbf{success rate} (percentage of runs achieving the threshold) and the \textbf{median number of function evaluations} (nfev) among successful runs.
+
+\section{Results}
+\label{sec:results}
+
+\subsection{Easy Functions (64--1024D)}
+
+On easy unimodal functions, all algorithms achieve 100\% success rate at all dimensions, with two exceptions: SHADE fails on shifted\_sphere at 1024D (0\% success rate) and Zero-Gradient fails on discus at 128D (99\% success rate). Table~\ref{tab:easy} reports median nfev aggregated across all six easy functions.
+
+\begin{table}[h]
+\centering
+\caption{Easy functions: median of per-function median nfev across 6 functions. Bold = fastest.}
+\label{tab:easy}
+\begin{tabular}{@{}rrrrrrl@{}}
+\toprule
+Dim & ANS & ANSR & DPNM & DE & SHADE & ZG \\
+\midrule
+64   & 1856  & 1856  & 3072  & 2528  & 1856  & \textbf{1380} \\
+128  & 2832  & 2848  & 5632  & 3968  & \textbf{2176}  & 2669 \\
+256  & 4352  & 4352  & 10112 & 6272  & \textbf{3264}  & 5340 \\
+512  & 6976  & 6960  & 16864 & 10048 & \textbf{5376}  & 10689 \\
+1024 & \textbf{12288} & \textbf{12288} & 23776 & 16832 & ---$^\dagger$ & 21350 \\
+\bottomrule
+\end{tabular}
+
+\small $^\dagger$SHADE fails on shifted\_sphere at 1024D (0\% success rate).
+\end{table}
+
+Key observations:
+\begin{itemize}
+    \item ANS and ANSR are nearly identical on easy functions. The restart mechanism does not trigger on unimodal landscapes, confirming that it adds no overhead.
+    \item SHADE is faster than ANSR at 128--512D (and ties at 64D) on this group, but \textbf{fails on shifted\_sphere at 1024D} (0\% success), while ANS/ANSR achieve 100\% at all dimensions. SHADE's speed advantage is limited to the problem class where it does not break.
+    \item \textbf{DPNM is 2--3$\times$ slower than ANS/ANSR at every dimension.} The cosine annealing and adaptive mechanisms hurt rather than help on these simple landscapes.
+    \item ZG is competitive at low dimensions but scales poorly.
+\end{itemize}
+
+\subsection{Medium Terrain (64--256D)}
+
+Table~\ref{tab:terrain} shows results on hilly and forest functions. Zero-Gradient fails entirely (0\% success) and is omitted. SHADE fails on hilly at 128D and 256D (0\% success) and is marked ---.
+
+\begin{table}[h]
+\centering
+\caption{Medium terrain: median nfev (success rate if $< 100\%$). Bold = fastest. --- = 0\% success.}
+\label{tab:terrain}
+\begin{tabular}{@{}llrrrrl@{}}
+\toprule
+Dim & Func & ANS & ANSR & DPNM & DE & SHADE \\
+\midrule
+64 & hilly  & 70.7k (97.5\%) & 70.7k (97\%) & 61.8k (99.5\%) & \textbf{42.4k} (72.5\%) & 286k (96.5\%) \\
+64 & forest & 47.3k & 47.3k & 47.1k & \textbf{29.5k} (96\%) & 86.0k (92\%) \\
+\midrule
+128 & hilly  & 159k (96\%) & 111k (83.5\%) & \textbf{101k} (97.5\%) & 137k (99\%) & --- \\
+128 & forest & 101k & 73.1k & \textbf{69.6k} & 85.6k & 196k (99.5\%) \\
+\midrule
+256 & hilly  & 274k (94.5\%) & 334k (98\%) & --- & \textbf{202k} (95\%) & --- \\
+256 & forest & 175k & 209k & --- & \textbf{128k} & 450k (94\%) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{DPNM fails at 256D} on both terrain functions (0\% success rate), while ANS, ANSR, and DE remain reliable. At lower dimensions DPNM is competitive, but its adaptive sigma schedule apparently reduces the perturbation too aggressively at higher dimensions, preventing convergence within the budget.
+
+\subsection{Medium Periodic: Shubert (16--64D)}
+\label{sec:shubert}
+
+The Shubert function is the critical test case for the restart mechanism. Table~\ref{tab:shubert} shows the results.
+
+\begin{table}[h]
+\centering
+\caption{Shubert function: median nfev (success rate). Bold = fastest. ZG = 0\% at all dims.}
+\label{tab:shubert}
+\begin{tabular}{@{}rrrrrr@{}}
+\toprule
+Dim & ANS & \textbf{ANSR} & DPNM & DE & SHADE \\
+\midrule
+16 & 13.8k & \textbf{9.1k} & 120k  & 16.6k & 41.1k \\
+   & (98\%) & (100\%) & (100\%) & (100\%) & (100\%) \\
+32 & 44.7k & \textbf{28.4k} & 403k  & 37.6k & 103k \\
+   & (87\%) & (100\%) & (100\%) & (100\%) & (100\%) \\
+64 & 187k  & \textbf{60.3k} & ---   & 81.8k & 245k \\
+   & (77.5\%) & (100\%) & (0\%)   & (100\%) & (100\%) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+This is the paper's central result:
+\begin{itemize}
+    \item \textbf{ANS degrades} as dimensionality increases: 98\% $\to$ 87\% $\to$ 77.5\% (155/200) success rate. Without restarts, particles that converge to the same local optimum of Shubert's periodic landscape cannot escape.
+    \item \textbf{ANSR maintains 100\% success rate at all dimensions} and is the fastest algorithm, requiring only 60k evaluations at 64D---1.4$\times$ faster than the next best (DE at 82k).
+    \item \textbf{DPNM fails entirely at 64D} (0\% success). The cosine annealing reduces $\sigma$ to near-zero late in the run, and the decaying restart tolerance stops triggering restarts precisely when they are most needed.
+    \item ANSR is 3.1$\times$ faster than ANS at 64D (60k vs 187k) among ANS's successful runs, showing that restarts not only improve reliability but also efficiency.
+\end{itemize}
+
+\subsection{Hard Discrete: Megacity (16--64D)}
+
+The megacity function has a piecewise-constant (step) landscape that is challenging for all algorithms. Table~\ref{tab:megacity} shows the results.
+
+\begin{table}[h]
+\centering
+\caption{Megacity: median nfev (success rate). Bold = fastest. ANSR, DPNM, ZG = 0\% at all dims; ANS = 0\% at 32D and 64D.}
+\label{tab:megacity}
+\begin{tabular}{@{}rrrrrr@{}}
+\toprule
+Dim & ANS & ANSR & DPNM & \textbf{DE} & SHADE \\
+\midrule
+16 & 126k  & --- & --- & 36.8k & \textbf{36.3k} \\
+   & (73\%) &     &     & (80\%) & (75\%) \\
+32 & ---   & --- & --- & \textbf{91.8k} & 115k \\
+   &       &     &     & (80\%) & (73.5\%) \\
+64 & ---   & --- & --- & \textbf{217k} & 364k \\
+   &       &     &     & (90.5\%) & (7\%) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+On this problem class, \textbf{DE is the clear winner}, being the only algorithm with consistently high success rates across all dimensions. The ANS family struggles because the Gaussian perturbation scaled by $|r_d - \text{pos}_d|$ becomes ineffective on a step landscape where the gradient signal is zero almost everywhere. DE's differential mutation, which uses population-level differences rather than individual distances, is better suited to this landscape type.
+
+\subsection{Summary}
+
+Table~\ref{tab:summary} summarises each algorithm's behaviour across problem groups.
+
+\begin{table}[h]
+\centering
+\caption{Algorithm rankings across all experiments. $^*$Fast but fails at 1024D.}
+\label{tab:summary}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+Algorithm & Easy & Terrain & Periodic & Discrete \\
+\midrule
+ANS       & Reliable & Reliable & Degrades & Poor \\
+\textbf{ANSR} & \textbf{Reliable} & \textbf{Reliable} & \textbf{Best} & Poor \\
+DPNM      & Slow     & Fails 256D & Fails 64D & Poor \\
+DE        & Reliable & Reliable & Good     & \textbf{Best} \\
+SHADE     & Fast$^*$ & Fails hilly $\geq$128D & Good & Degrades \\
+ZG        & Scales poorly & Fails & Fails & Fails \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Statistical Analysis}
+
+All statistical tests use 200 independent runs per configuration. I report median nfev with Median Absolute Deviation (MAD) as the primary measure of spread---MAD is more robust than standard deviation to outliers and skewed distributions, which are common in optimization benchmarks. I also report std for completeness. Pairwise comparisons use Mann--Whitney U tests with Vargha--Delaney $\hat{A}_{12}$ effect sizes; multi-algorithm ranking uses Friedman tests with Holm post-hoc correction.
+
+\subsection{Easy Functions: Median $\pm$ MAD}
+
+Table~\ref{tab:easy_mad} reports median nfev $\pm$ MAD pooled across all six easy functions.
+
+\begin{table}[ht]
+\centering
+\caption{Easy functions: median nfev (MAD / std) pooled across 6 functions $\times$ 200 seeds.}
+\label{tab:easy_mad}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}rllllll@{}}
+\toprule
+Dim & ANS & ANSR & DPNM & DE & SHADE & ZG \\
+\midrule
+64   & 1856 (704/772)   & 1856 (704/772)   & 3072 (1920/1892)   & 2496 (1024/1109) & \textbf{1856} (384/650) & 1388 (78/143) \\
+128  & 2816 (1088/1129)  & 2816 (1088/1130)  & 5632 (3392/3157)   & 3968 (1568/1675) & \textbf{2176} (1024/1338) & 2714$^\ddagger$ (166/279) \\
+256  & 4352 (1600/1736)  & 4352 (1600/1735)  & 10112 (5312/4862)  & 6272 (2368/2582) & \textbf{3264} (1984/2720) & 5386 (352/550) \\
+512  & 6976 (2752/3120)  & 6976 (2752/3119)  & 16896 (6720/5825)  & 10048 (3776/4218) & \textbf{5376} (3968/7419) & 10738 (764/1122) \\
+1024 & \textbf{12288} (5056/5658) & \textbf{12288} (5056/5664) & 23744 (5344/5820) & 16832 (6144/7111) & 9792$^*$ (8192/7875) & 21400 (1472/2266) \\
+\bottomrule
+\end{tabular}}
+
+\smallskip
+
+\small $^*$SHADE fails on shifted\_sphere at 1024D (0\% success), pooled stats exclude that function. \\
+$^\ddagger$ZG fails on discus at 128D (99\% success), pooled stats exclude that function.
+\end{table}
+
+ANS and ANSR are statistically indistinguishable on easy functions (Mann--Whitney $p > 0.5$ on all functions at all dimensions, no significant differences). DPNM is significantly slower than ANSR at all dimensions (Holm-corrected $p < 0.05$ at 256D, 512D, 1024D in Friedman ranking). SHADE converges faster than ANSR at 128--512D on the functions where it succeeds, but its higher MAD at 512D (3968 vs 2752) and growing variance (std 7419 vs 3119) indicate less predictable behaviour, and its total failure on shifted\_sphere at 1024D makes it less reliable overall.
+
+\subsection{Shubert: Pairwise Comparisons}
+
+Table~\ref{tab:shubert_stat} shows Mann--Whitney U tests for the key comparison: ANSR vs all other algorithms on Shubert.
+
+\begin{table}[ht]
+\centering
+\caption{Shubert: pairwise Mann--Whitney U tests. Median (MAD / std), success rate, $p$-value, $\hat{A}_{12} = P(\text{ANSR} > \text{other})$; values ${<}\,0.5$ favour ANSR. All $p < 10^{-30}$, all effects large.}
+\label{tab:shubert_stat}
+\begin{tabular}{@{}rllrr@{}}
+\toprule
+Dim & Algorithm A & Algorithm B & $p$ & $\hat{A}_{12}$ \\
+\midrule
+16 & ANSR: 9056 (1216 / 3889) & ANS: 13824 (1984 / 3118) & $10^{-32}$ & 0.155 \\
+   & 100\% & 98\% & & \\
+16 & ANSR & DE: 16576 (832 / 1330) & $10^{-46}$ & 0.089 \\
+16 & ANSR & SHADE: 41056 (2208 / 3211) & $10^{-67}$ & 0.000 \\
+16 & ANSR & DPNM: 120k (21568 / 31366) & $10^{-67}$ & 0.000 \\
+\midrule
+32 & ANSR: 28352 (4512 / 7164) & ANS: 44672 (6336 / 11730) & $10^{-47}$ & 0.070 \\
+   & 100\% & 87\% & & \\
+32 & ANSR & DE: 37600 (1376 / 2040) & $10^{-48}$ & 0.080 \\
+32 & ANSR & SHADE: 102752 (3424 / 4986) & $10^{-67}$ & 0.000 \\
+\midrule
+64 & ANSR: 60320 (5184 / 11241) & ANS: 187k (34304 / 52989) & $10^{-58}$ & 0.001 \\
+   & 100\% & 77.5\% & & \\
+64 & ANSR & DE: 81760 (2176 / 3527) & $10^{-58}$ & 0.037 \\
+64 & ANSR & SHADE: 245120 (5568 / 8702) & $10^{-67}$ & 0.000 \\
+64 & ANSR & DPNM: 0\% success & --- & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All differences are statistically significant with large effect sizes. ANSR dominates all competitors with $\hat{A}_{12} < 0.10$ against DE and $\hat{A}_{12} \approx 0$ against SHADE and DPNM at every dimension tested. The advantage over ANS grows with dimension: $\hat{A}_{12} = 0.155$ at 16D (large) to $\hat{A}_{12} = 0.001$ at 64D (near-total dominance).
+
+The Friedman test across all three dimensions ranks ANSR first (average rank 1.0), DE second (2.0), and SHADE third (3.0), with $\chi^2 = 6.0$, $p = 0.050$.
+
+\subsection{Robustness of the ANS vs ANSR Comparison}
+
+The comparison between ANS and ANSR requires care because (a) nfev comparisons on successful runs only can introduce survivor bias when success rates differ, and (b) the two algorithms were tuned independently, yielding different $p_{\text{self}}$ values. I address both concerns.
+
+\subsubsection{Survivor Bias}
+
+On Shubert at 64D, ANS succeeds on 155/200 runs (77.5\%). Comparing nfev only among those 155 runs would be biased---the failures are precisely the runs where ANS got stuck. I use two bias-free approaches:
+
+\textbf{Penalized nfev.} Assign nfev $= 500{,}000$ (the budget) to failed runs. Mann--Whitney test (ANSR $<$ ANS, one-sided): $p = 1.2 \times 10^{-33}$ at 16D, $p = 1.8 \times 10^{-52}$ at 32D, $p = 2.9 \times 10^{-67}$ at 64D.
+
+\textbf{Direct $f(x)$ comparison on all 200 seeds.} Comparing the final $f(x)$ values (not nfev) across all runs including failures: $p = 0.057$ at 16D, $p = 0.093$ at 32D, $p = 1.5 \times 10^{-7}$ at 64D (Mann--Whitney, two-sided). The weaker significance at 16--32D is expected: most runs in both algorithms converge to $f(x) \approx 0.009$, so the distributions overlap heavily. The difference is in \emph{whether} they converge, not \emph{how well}---which is captured by the success rate test.
+
+\textbf{Success rate (Fisher's exact test).} The success rate difference is significant at 32D ($p = 1.3 \times 10^{-8}$) and 64D ($p = 3.5 \times 10^{-15}$). At 16D the 98\% vs 100\% gap is not significant ($p = 0.12$), which is consistent: the restart mechanism matters most at higher dimensions where more local optima exist.
+
+\subsubsection{Parameter Confound}
+
+The tuner selected different $p_{\text{self}}$ for ANS and ANSR on Shubert (Table~\ref{tab:params_ans}): ANS uses $p_{\text{self}} = 0.24$--$0.56$ (partial individual search), while ANSR uses $p_{\text{self}} = 0.00$--$0.04$ (near-pure social search). This is not a confound but a \emph{consequence} of the restart mechanism.
+
+ANSR is identical to ANS in source code except for the addition of the pairwise restart check (lines 100--129 in the implementation). The perturbation loop, boundary handling, and selection logic are unchanged. With restarts available, the tuner can afford pure social search ($p_{\text{self}} \approx 0$) because population diversity is maintained by restarts rather than by individual exploration. Without restarts, ANS compensates by increasing $p_{\text{self}}$ to avoid total population collapse---but this is a less effective strategy, as the declining success rate shows.
+
+\subsubsection{Tune Search Exhaustiveness}
+
+A residual concern is that ANS might perform better with parameters outside the grid. To test this, I examine how many of the 600 grid configurations produced consistent convergence (all 10 tune seeds) on Shubert:
+
+\begin{center}
+\small
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+ & \multicolumn{2}{c}{Converging configs} & \multicolumn{2}{c}{Best nfev} & Ratio \\
+Dim & ANS & ANSR & ANS & ANSR & (ANSR/ANS) \\
+\midrule
+16D & 165/600 & 173/600 & 12{,}077 & 10{,}458 & 0.87 \\
+32D & 54/600  & 76/600  & 41{,}421 & 26{,}694 & 0.64 \\
+64D & 3/600   & 31/600  & 197{,}395 & 57{,}850 & 0.29 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+At 64D, only 3 of 600 ANS configurations produced consistent convergence on all tune seeds. The best of those three (nfev = 197{,}395) is consistent with the penalized benchmark median (203{,}328), confirming that this is genuinely the best ANS can do---not an artefact of the chosen parameters. ANSR found 10$\times$ more viable configurations and its best is 3.4$\times$ faster. The advantage is structural: no parameter setting compensates for the absence of a restart mechanism on a multimodal landscape.
+
+\subsubsection{Sanity Check: Easy Functions}
+
+On easy unimodal functions, ANS and ANSR use identical tuned parameters ($\sigma = 0.12$, $p_{\text{self}} = 0.00$ at 64--256D) and produce statistically indistinguishable results: Mann--Whitney $p = 0.98$ at 64D, $p = 0.96$ at 512D, $p = 0.95$ at 1024D. This confirms that the restart mechanism adds zero overhead when it is not needed and that the implementation difference has no side effects.
+
+\subsection{ANSR vs All Algorithms: Comprehensive Comparison}
+
+Table~\ref{tab:ansr_vs_all} presents the penalized-nfev comparison of ANSR against every other algorithm on every (test group, dimension) combination. Penalized nfev assigns the full budget to failed runs, avoiding survivor bias. I report the Mann--Whitney $p$-value (one-sided, testing whether ANSR is faster), the $\hat{A}_{12}$ effect size, and the winner.
+
+\begin{table}[!htbp]
+\centering
+\caption{ANSR vs all algorithms: penalized nfev (Mann--Whitney, one-sided). W = winner, $+$ = ANSR wins, $-$ = other wins, $=$ = no significant difference. $\hat{A}_{12} = P(\text{ANSR} > \text{other})$; values $< 0.5$ favour ANSR. All $p$-values Bonferroni-survivable at $\alpha = 0.05$.}
+\label{tab:ansr_vs_all}
+\small
+\begin{tabular}{@{}lllrrl@{}}
+\toprule
+Group & Dim & vs & $p$ & $\hat{A}_{12}$ & W \\
+\midrule
+\multicolumn{6}{@{}l}{\textbf{Easy} (ANSR beats DPNM, DE; ties ANS; loses to SHADE 64--1024D and ZG 64--128D)} \\
+\midrule
+Easy & 64--1024 & ANS & $\approx 0.5$ & 0.500 & $=$ \\
+Easy & 64--1024 & DPNM & $< 10^{-88}$ & 0.06--0.27 & $+$ \\
+Easy & 64--1024 & DE & $< 10^{-34}$ & 0.31--0.36 & $+$ \\
+Easy & 64--512 & SHADE & $< 10^{-6}$ & 0.55--0.63 & $-$ \\
+Easy & 1024 & SHADE & $< 10^{-9}$ & 0.57 & $-$$^\dagger$ \\
+Easy & 64--128 & ZG & $< 10^{-8}$ & 0.56--0.67 & $-$ \\
+Easy & 256--1024 & ZG & $< 10^{-43}$ & 0.13--0.34 & $+$ \\
+\midrule
+\multicolumn{6}{@{}l}{\textbf{Periodic} (ANSR beats all at every dimension)} \\
+\midrule
+Shubert & 16 & ANS & $10^{-33}$ & 0.152 & $+$ \\
+Shubert & 32 & ANS & $10^{-52}$ & 0.061 & $+$ \\
+Shubert & 64 & ANS & $10^{-67}$ & 0.001 & $+$ \\
+Shubert & 16--64 & DPNM & $< 10^{-67}$ & 0.000 & $+$ \\
+Shubert & 16--64 & DE & $< 10^{-46}$ & 0.04--0.09 & $+$ \\
+Shubert & 16--64 & SHADE & $< 10^{-67}$ & 0.000 & $+$ \\
+\midrule
+\multicolumn{6}{@{}l}{\textbf{Terrain} (ANSR beats SHADE, ZG; mixed vs ANS, DE, DPNM by dimension)} \\
+\midrule
+Terrain & 64 & DE & $10^{-57}$ & 0.823 & $-$$^\P$ \\
+Terrain & 64 & DPNM & $10^{-8}$ & 0.615 & $-$ \\
+Terrain & 64 & SHADE & $10^{-114}$ & 0.036 & $+$ \\
+Terrain & 128 & ANS & $10^{-28}$ & 0.274 & $+$$^\ddagger$ \\
+Terrain & 128 & DE & $10^{-22}$ & 0.303 & $+$ \\
+Terrain & 128 & DPNM & $10^{-17}$ & 0.668 & $-$ \\
+Terrain & 128 & SHADE & $10^{-101}$ & 0.070 & $+$ \\
+Terrain & 256 & ANS & $10^{-30}$ & 0.733 & $-$ \\
+Terrain & 256 & DE & $10^{-83}$ & 0.895 & $-$ \\
+Terrain & 256 & SHADE & $10^{-131}$ & 0.008 & $+$ \\
+Terrain & 256 & DPNM & $10^{-149}$ & 0.005 & $+$ \\
+\midrule
+\multicolumn{6}{@{}l}{\textbf{Discrete} (ANSR 0\% SR at all dims; loses to ANS at 16D)} \\
+\midrule
+Megacity & 16 & ANS & $10^{-49}$ & 0.865 & $-$$^\S$ \\
+Megacity & 16--64 & DE & $< 10^{-49}$ & 0.87--0.95 & $-$ \\
+Megacity & 16--32 & SHADE & $< 10^{-49}$ & 0.87--0.88 & $-$ \\
+Megacity & 64 & SHADE & $10^{-4}$ & 0.535 & $-$ \\
+\bottomrule
+\end{tabular}
+
+\small $^\dagger$SHADE is faster on 5/6 functions but fails shifted\_sphere (0\% SR, Fisher $p = 10^{-64}$). \\
+\small $^\ddagger$ANSR wins on penalized nfev but has lower SR than ANS (91.8\% vs 98\%, Fisher $p = 7.5\times10^{-5}$). \\
+\small $^\P$DE is faster at 64D but less reliable: 84.2\% SR vs ANSR 98.5\% (Fisher $p = 5\times10^{-14}$). \\
+\small $^\S$ANS achieves 73\% SR (146/200) at megacity 16D while ANSR achieves 0\%. The restart mechanism randomises particles away from the integer grid, eliminating ANS's ability to converge via deterministic perturbation.
+\end{table}
+
+\textbf{Summary of wins/losses} (across 14 group$\times$dim combinations, penalized nfev, Mann--Whitney $p < 0.05$):
+\begin{itemize}
+    \item \textbf{vs ANS}: ANSR wins 4 (periodic 16--64D, terrain 128D), loses 2 (terrain 256D; megacity 16D where ANS 73\% vs ANSR 0\%), ties 8. Note: terrain 128D is a speed-but-not-reliability win---ANSR is faster by penalized nfev ($p=10^{-28}$) but has lower SR (83.5\% vs 96\%, Fisher $p = 7.5\times10^{-5}$).
+    \item \textbf{vs DPNM}: ANSR wins 9 (easy 64--1024, periodic 16--64D, terrain 256D), loses 2 (terrain 64D and 128D), ties 3 (discrete, both 0\%).
+    \item \textbf{vs DE}: ANSR wins 9 (easy 64--1024, periodic 16--64D, terrain 128D), loses 5 (terrain 64D/256D, megacity 16--64D).
+    \item \textbf{vs SHADE}: ANSR wins 6 (periodic 16--64D, terrain 64--256D), loses 8 (easy 64--1024D, megacity 16--64D).
+    \item \textbf{vs ZG}: ANSR wins 9 (easy 256--1024D, terrain 64--256D, periodic 16--64D), loses 2 (easy 64--128D), ties 3 (discrete, both 0\%).
+\end{itemize}
+
+Except for megacity, ANSR never fails catastrophically on any problem where at least one other algorithm succeeds. On megacity 16D, ANS achieves 73\% SR while ANSR achieves 0\%---the only case where the restart mechanism makes performance strictly worse than the base algorithm.
+
+\subsection{Terrain: DPNM Failure Analysis}
+
+At 64D and 128D where DPNM converges, it is faster than ANSR on hilly (Mann--Whitney $p < 10^{-24}$, $\hat{A}_{12} = 0.81$--$0.93$, large effect). However, at 256D DPNM achieves 0\% success on both functions while ANSR maintains 98--100\%. The speed advantage at lower dimensions does not compensate for total failure at higher dimensions. This pattern---fast when it works, but brittle---is characteristic of over-tuned adaptive schedules.
+
+\subsection{Megacity: DE Dominance and ANSR Failure}
+
+On megacity, ANSR achieves 0\% success rate at all dimensions---but so does ANS at 32D and 64D. The striking exception is 16D: ANS achieves 73\% SR (146/200) while ANSR achieves 0\% (Fisher $p = 1.4\times10^{-63}$). The restart mechanism is the cause: when two particles satisfy $\tau = 10^{-8}$, ANSR resets one to a random uniform position. On a continuous landscape this re-introduces diversity; on a discrete integer landscape it discards whatever progress the particle had made toward the grid. ANS, by contrast, continues to apply small Gaussian perturbations that can still land on the integer optimum. Restarts eliminate this opportunity entirely.
+
+DE dominates at 16--32D (80\% SR) and remains the only solver at 64D (90.5\% SR, Fisher $p < 10^{-92}$ vs all others). At 32D, DE is significantly faster than SHADE ($p = 1.0 \times 10^{-30}$, $\hat{A}_{12} = 0.119$, DE median 91840, MAD 3776 vs SHADE median 114496, MAD 14400). DE's differential vector mutation is well-suited to step landscapes because the large mutation steps ($F = 0.52$--$0.64$) can jump across flat plateaus where gradient-based perturbations stall.
+
+\subsection{Friedman Rankings on Easy Functions}
+
+On easy functions (where all algorithms achieve near-100\% success), the Friedman test ranks SHADE first in speed, followed by ANS $\approx$ ANSR. However, this ranking only reflects convergence speed on problems where all algorithms succeed. It does not account for SHADE's failure on shifted\_sphere at 1024D or its failures on terrain and periodic functions. The Holm post-hoc correction confirms that DPNM is significantly worse than ANS/ANSR ($p_{\text{adj}} < 0.05$) at 256D and above. ANS and ANSR are never significantly different ($p_{\text{adj}} = 1.0$), confirming that the restart mechanism has zero cost on unimodal problems.
+
+\section{Discussion}
+
+\subsection{Why Restarts Work}
+
+The restart mechanism addresses a specific failure mode of ANS: population collapse. In the original ANS, when two particles find solutions of similar quality in the same basin, they continue to refine within that basin forever. On unimodal problems this is desirable---the basin \emph{is} the global optimum. On multimodal problems, it means that once a particle is ``captured'' by a local optimum, it can never escape.
+
+ANSR's pairwise comparison detects this collapse cheaply (a scalar comparison) and responds minimally (reset one particle). The tolerance $\tau = 10^{-8}$ is tight enough that restarts only trigger when two particles have truly converged, not when they happen to have similar fitness in different basins.
+
+The effect is most visible on Shubert, which has a regular grid of nearly identical local optima. Without restarts, ANS particles collapse onto a small number of basins. With restarts, the population maintains coverage of the search space, and the probability of finding the global optimum increases with the number of restarts.
+
+The tune search confirms this is a structural limitation, not a tuning artefact. Of 600 parameter configurations tested for ANS on Shubert 64D, only 3 produced convergence on all tune seeds. The best achievable ANS nfev (197{,}395) is 3.4$\times$ worse than ANSR's best (57{,}850), and matches the benchmark median---meaning the tuner already found the best ANS can do.
+
+\subsection{Why Adaptive Complexity Hurts (DPNM)}
+
+ANSR~DPNM adds four mechanisms, each individually reasonable:
+\begin{enumerate}
+    \item Cosine sigma annealing reduces perturbation over time (explore early, exploit late).
+    \item Power-law restart decay reduces restarts over time (settle into good basins late).
+    \item Opposition-based restart directs restarted particles to unexplored regions.
+    \item Toroidal boundary handling with neighbour multiplier scales social learning differently from individual learning.
+\end{enumerate}
+
+However, in combination these mechanisms interact pathologically:
+\begin{itemize}
+    \item On Shubert at 64D, the algorithm needs restarts \emph{throughout} the run, not just early. The decaying tolerance turns off restarts too soon, and the annealing sigma prevents large enough perturbations to escape local optima late in the run.
+    \item On terrain functions at 256D, the cosine annealing drives $\sigma_{\text{eff}} \to 0$ before convergence is achieved, leaving particles frozen in suboptimal positions.
+    \item On easy functions, the adaptive schedule adds unnecessary complexity: a constant $\sigma$ already works perfectly, and the annealing only slows convergence.
+\end{itemize}
+
+This is consistent with the principle articulated in Wu's original paper~\cite{wu2015ans}, citing Iacca et al.: ``a very simple algorithm, if properly designed, can outperform much more complex and computationally expensive approaches.''
+
+\subsection{Comparison with DE and SHADE}
+
+DE and SHADE serve as established baselines but both have reliability gaps.
+
+\textbf{SHADE} converges faster than ANSR on easy functions at 128--512D (tying at 64D), but fails on shifted\_sphere at 1024D (0\% success), fails on hilly at 128D and 256D (0\%), and is 4$\times$ slower than ANSR on Shubert (245k vs 60k at 64D). Its adaptive $F$/$CR$ mechanism works well when the landscape is well-conditioned but becomes unstable at higher dimensions and on multimodal problems.
+
+\textbf{DE} is the most robust baseline: it achieves 100\% success on all easy functions at all dimensions and dominates on megacity. However, DE also has reliability gaps on terrain functions: 72.5\% on hilly at 64D, 96\% on forest at 64D, and 95\% on hilly at 256D. On Shubert, ANSR is 1.4$\times$ faster (60k vs 82k at 64D, $p < 10^{-58}$).
+
+\textbf{ANSR} is the only algorithm that achieves $\geq$~83.5\% success rate on every problem where any ANS-family or DE-family algorithm succeeds (excluding megacity, where the ANS perturbation model is structurally unsuited). Its lowest non-megacity success rate is 83.5\% (hilly 128D). This robustness comes from the restart mechanism, which adds no cost on easy problems and is essential on multimodal ones.
+
+The ANS family and the DE family represent fundamentally different search strategies: ANS uses distance-scaled Gaussian perturbation from personal/social bests, while DE uses population-level vector differences. Neither dominates the other across all problem types, consistent with the No Free Lunch theorem.
+
+\subsection{Scaling Behavior}
+
+On easy functions, ANS/ANSR show sub-linear scaling of nfev with dimension (1.9k at 64D to 12.3k at 1024D, a $6.5\times$ increase for $16\times$ more dimensions) with 100\% reliability at every dimension. DPNM scales worse ($3.1$k to $23.8$k, $7.7\times$). SHADE is faster at 128--512D but fails at 1024D, making its scaling behaviour incomplete.
+
+On Shubert, ANSR scales from 9.1k (16D) to 60.3k (64D)---a $6.6\times$ increase for $4\times$ the dimensions---while ANS degrades in both speed and reliability.
+
+\section{Conclusion}
+
+I extended ANS with a pairwise restart mechanism (ANSR) and demonstrated that this minimal modification is sufficient to transform ANS from an algorithm that struggles on multimodal problems into one that excels on them. On the Shubert function, ANSR achieves 100\% success rate and is the fastest among all tested algorithms at all dimensions.
+
+I also reported a negative result: ANSR~DPNM, which adds cosine annealing, restart decay, opposition-based reinitialization, and toroidal boundary handling with neighbour scaling, consistently underperforms plain ANSR. This confirms that additional adaptive complexity does not automatically translate to better performance, and that a single well-chosen mechanism (restarts) is more valuable than multiple interacting adaptive schedules.
+
+The restart mechanism is simple to implement (approximately 15 lines of code), adds negligible computational overhead, requires no per-problem tuning ($\tau = 10^{-8}$ works universally), and preserves ANS's performance on unimodal problems. I recommend it as the default configuration for ANS in practice.
+
+\bibliographystyle{IEEEtran}
+\begin{thebibliography}{9}
+
+\bibitem{wu2015ans}
+G.~Wu,
+``Across neighbourhood search for numerical optimization,''
+\emph{Information Sciences}, vol.~329, pp.~597--618, 2016.
+doi:~\href{https://doi.org/10.1016/j.ins.2015.09.051}{10.1016/j.ins.2015.09.051}
+
+\bibitem{storn1997de}
+R.~Storn and K.~Price,
+``Differential Evolution -- A Simple and Efficient Heuristic for global Optimization over Continuous Spaces,''
+\emph{Journal of Global Optimization}, vol.~11, no.~4, pp.~341--359, 1997.
+
+\bibitem{tanabe2013shade}
+R.~Tanabe and A.~Fukunaga,
+``Success-History Based Parameter Adaptation for Differential Evolution,''
+in \emph{IEEE Congress on Evolutionary Computation}, 2013, pp.~71--78.
+
+\bibitem{derrac2011practical}
+J.~Derrac, S.~Garc{\'i}a, D.~Molina, and F.~Herrera,
+``A practical tutorial on the use of nonparametric statistical tests as a methodology for comparing evolutionary and swarm intelligence algorithms,''
+\emph{Swarm and Evolutionary Computation}, vol.~1, no.~1, pp.~3--18, 2011.
+
+\end{thebibliography}
+
+\appendix
+
+\section{Statistical Methods}
+\label{app:stats}
+
+This appendix describes the nonparametric statistical tests used throughout the paper, following the tutorial of Derrac et al.~\cite{derrac2011practical}.
+
+\subsection{Mann--Whitney U Test}
+
+The Mann--Whitney U test (also called Wilcoxon rank-sum) is a nonparametric test for whether two independent samples come from the same distribution. It does not assume normality, making it appropriate for nfev distributions which are typically right-skewed.
+
+Given samples $X = \{x_1, \ldots, x_m\}$ and $Y = \{y_1, \ldots, y_n\}$, all $m + n$ values are ranked jointly. The test statistic is:
+\begin{equation}
+    U = R_X - \frac{m(m+1)}{2}
+\end{equation}
+where $R_X$ is the sum of ranks assigned to sample $X$. Under the null hypothesis (identical distributions), $U$ follows a known distribution; for large samples ($m, n \geq 20$), a normal approximation is used. I use two-sided tests ($H_1$: distributions differ) with $\alpha = 0.05$.
+
+\subsection{Vargha--Delaney $\hat{A}_{12}$ Effect Size}
+
+A $p$-value indicates whether a difference exists but not how large it is. The Vargha--Delaney $\hat{A}_{12}$ statistic measures effect size as the probability that a randomly chosen observation from one sample is larger than a randomly chosen observation from the other:
+\begin{equation}
+    \hat{A}_{12} = \frac{R_X / m - (m+1)/2}{n}
+\end{equation}
+where $R_X$ and $m, n$ are as above. $\hat{A}_{12} = 0.5$ indicates no effect. I use the convention $\hat{A}_{12} = P(X > Y)$, so values below $0.5$ indicate $X$ tends to be smaller (better, for minimisation). The magnitude thresholds are: $|{\hat{A}_{12} - 0.5}| < 0.06$ negligible, $< 0.14$ small, $< 0.21$ medium, $\geq 0.21$ large.
+
+\subsection{Penalized nfev}
+
+When success rates differ between algorithms, comparing nfev only among successful runs introduces survivor bias---the algorithm with lower success rate has its worst runs removed. To avoid this, I assign nfev equal to the full evaluation budget (50{,}000 for easy functions, 500{,}000 for all others) to every failed run before computing the Mann--Whitney test. This penalized nfev ensures that failures are counted as worse than any successful run.
+
+\subsection{Fisher's Exact Test}
+
+To compare success rates directly, I use Fisher's exact test on the $2 \times 2$ contingency table of (algorithm $\times$ success/failure). Unlike the $\chi^2$ test, Fisher's test is exact for any sample size and does not rely on asymptotic approximations.
+
+\subsection{Friedman Test with Holm Post-Hoc Correction}
+
+When comparing $k > 2$ algorithms simultaneously, pairwise tests inflate the family-wise error rate. The Friedman test is a nonparametric alternative to repeated-measures ANOVA: for each problem instance (function $\times$ dimension), algorithms are ranked $1, \ldots, k$ by performance, and the test checks whether the average ranks differ significantly.
+
+If the Friedman test rejects the null hypothesis ($p < 0.05$), I apply Holm--Bonferroni post-hoc correction to identify which pairs differ. The Holm procedure orders the $\binom{k}{2}$ pairwise $p$-values from smallest to largest and compares each $p_i$ against $\alpha / (m - i + 1)$ where $m = \binom{k}{2}$. This controls the family-wise error rate while being less conservative than Bonferroni correction.
+
+\end{document}
