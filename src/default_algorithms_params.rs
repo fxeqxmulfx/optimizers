@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::algorithms::{ans::ANS, ansr::ANSR, ansr_dpnm::AnsrDpnm, de::DE, shade::SHADE, zero_gradient::ZeroGradient};
+use crate::algorithms::{ans::ANS, ans_sort::AnsSorted, ansr::ANSR, ansr_dpnm::AnsrDpnm, de::DE, shade::SHADE, zero_gradient::ZeroGradient};
 
 pub(crate) fn frange(start: f32, step: f32, end: f32) -> Vec<f32> {
     let n = ((end - start) / step).round() as usize + 1;
@@ -30,6 +30,16 @@ pub fn ans_params(dimension_count: usize) -> BTreeMap<String, Vec<f32>> {
     let mut m = ansr_params(dimension_count);
     m.remove("restart_tolerance");
     m
+}
+
+pub static DEFAULT_ANS_SORT: AnsSorted = AnsSorted {
+    popsize: 64,
+    sigma: 0.15,
+    self_instead_neighbour: 0.7,
+};
+
+pub fn ans_sort_params(dimension_count: usize) -> BTreeMap<String, Vec<f32>> {
+    ans_params(dimension_count)
 }
 
 pub static DEFAULT_ANSR: ANSR = ANSR {

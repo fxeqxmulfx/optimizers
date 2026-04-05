@@ -6,8 +6,8 @@ use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 
 use optimizers::{
-    algorithms::{ans::new_ans, ansr::new_ansr, ansr_dpnm::new_ansr_dpnm, de::new_de, shade::new_shade, zero_gradient::new_zero_gradient},
-    default_algorithms_params::{ans_params, ansr_params, ansr_dpnm_params, de_params, shade_params, zero_gradient_params},
+    algorithms::{ans::new_ans, ans_sort::new_ans_sort, ansr::new_ansr, ansr_dpnm::new_ansr_dpnm, de::new_de, shade::new_shade, zero_gradient::new_zero_gradient},
+    default_algorithms_params::{ans_params, ans_sort_params, ansr_params, ansr_dpnm_params, de_params, shade_params, zero_gradient_params},
     functions::{EASY_TEST_FUNCTIONS, HARD_TEST_FUNCTIONS, HARD_DISCRETE_FUNCTIONS, MEDIUM_PERIODIC_FUNCTIONS, LMMAES_TEST_FUNCTIONS, MAIN_TEST_FUNCTIONS, TERRAIN_TEST_FUNCTIONS, MINI_TEST_FUNCTIONS, WEIERSTRASS_TEST_FUNCTIONS, TestFunction},
     optimizer::Optimizer,
     runner::run_multiple_optimizaions,
@@ -145,6 +145,9 @@ fn tune_all(
 ) {
     if algo == "ans" || algo == "all" {
         tune("ANS", test_set, &ans_params(dimension_count), |p| new_ans(p), functions, dimension_count, maxiter, seed_count, stop_residual);
+    }
+    if algo == "ans_sort" || algo == "all" {
+        tune("ANS Sort", test_set, &ans_sort_params(dimension_count), |p| new_ans_sort(p), functions, dimension_count, maxiter, seed_count, stop_residual);
     }
     if algo == "ansr" || algo == "all" {
         tune("ANSR", test_set, &ansr_params(dimension_count), |p| new_ansr(p), functions, dimension_count, maxiter, seed_count, stop_residual);

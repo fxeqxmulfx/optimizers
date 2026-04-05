@@ -44,6 +44,7 @@ fn run_algo<T: Optimizer + Sync>(
 fn run_all(test_set: &str, functions: &BTreeMap<String, TestFunction>, dim: usize, maxiter: u64, csv: &mut File) {
     let p = get_params(test_set, dim);
     run_algo("ans", test_set, dim, &p.ans, functions, maxiter, csv);
+    run_algo("ans_sort", test_set, dim, &p.ans_sort, functions, maxiter, csv);
     run_algo("ansr", test_set, dim, &p.ansr, functions, maxiter, csv);
     run_algo("ansr_dpnm", test_set, dim, &p.ansr_dpnm, functions, maxiter, csv);
     run_algo("de", test_set, dim, &p.de, functions, maxiter, csv);

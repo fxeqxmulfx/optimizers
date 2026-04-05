@@ -1,7 +1,8 @@
-use crate::algorithms::{ans::ANS, ansr::ANSR, ansr_dpnm::AnsrDpnm, de::DE, shade::SHADE, zero_gradient::ZeroGradient};
+use crate::algorithms::{ans::ANS, ans_sort::AnsSorted, ansr::ANSR, ansr_dpnm::AnsrDpnm, de::DE, shade::SHADE, zero_gradient::ZeroGradient};
 
 pub struct BenchmarkParams {
     pub ans: ANS,
+    pub ans_sort: AnsSorted,
     pub ansr: ANSR,
     pub ansr_dpnm: AnsrDpnm,
     pub de: DE,
@@ -13,6 +14,7 @@ pub struct BenchmarkParams {
 fn default_params() -> BenchmarkParams {
     BenchmarkParams {
         ans: ANS { popsize: 64, sigma: 0.12, self_instead_neighbour: 0.0 },
+        ans_sort: AnsSorted { popsize: 64, sigma: 0.12, self_instead_neighbour: 0.0 },
         ansr: ANSR { popsize: 64, restart_tolerance: 1e-8, sigma: 0.12, self_instead_neighbour: 0.0 },
         ansr_dpnm: AnsrDpnm { popsize: 64, restart_tolerance: 1e-8, sigma: 0.2, self_instead_neighbour: 0.6, restart_decay_power: 2.0, neighbour_multiplier: 0.5 },
         de: DE { popsize: 64, f: 0.12, cr: 0.6 },
@@ -25,6 +27,7 @@ fn easy_params(dim: usize) -> BenchmarkParams {
     match dim {
         64 => BenchmarkParams {
             ans: ANS { popsize: 64, sigma: 0.12, self_instead_neighbour: 0.0 },
+            ans_sort: AnsSorted { popsize: 64, sigma: 0.12, self_instead_neighbour: 0.0 },
             ansr: ANSR { popsize: 64, restart_tolerance: 1e-8, sigma: 0.12, self_instead_neighbour: 0.0 },
             ansr_dpnm: AnsrDpnm { popsize: 64, restart_tolerance: 1e-8, sigma: 0.2, self_instead_neighbour: 0.4, restart_decay_power: 2.0, neighbour_multiplier: 0.5 },
             de: DE { popsize: 64, f: 0.12, cr: 0.6 },
@@ -33,6 +36,7 @@ fn easy_params(dim: usize) -> BenchmarkParams {
         },
         128 => BenchmarkParams {
             ans: ANS { popsize: 64, sigma: 0.12, self_instead_neighbour: 0.0 },
+            ans_sort: AnsSorted { popsize: 64, sigma: 0.12, self_instead_neighbour: 0.04 },
             ansr: ANSR { popsize: 64, restart_tolerance: 1e-8, sigma: 0.12, self_instead_neighbour: 0.0 },
             ansr_dpnm: AnsrDpnm { popsize: 64, restart_tolerance: 1e-8, sigma: 0.2, self_instead_neighbour: 0.6, restart_decay_power: 2.0, neighbour_multiplier: 0.5 },
             de: DE { popsize: 64, f: 0.12, cr: 0.6 },
@@ -41,6 +45,7 @@ fn easy_params(dim: usize) -> BenchmarkParams {
         },
         256 => BenchmarkParams {
             ans: ANS { popsize: 64, sigma: 0.12, self_instead_neighbour: 0.0 },
+            ans_sort: AnsSorted { popsize: 64, sigma: 0.12, self_instead_neighbour: 0.16 },
             ansr: ANSR { popsize: 64, restart_tolerance: 1e-8, sigma: 0.12, self_instead_neighbour: 0.0 },
             ansr_dpnm: AnsrDpnm { popsize: 64, restart_tolerance: 1e-8, sigma: 0.2, self_instead_neighbour: 0.6, restart_decay_power: 2.0, neighbour_multiplier: 0.5 },
             de: DE { popsize: 64, f: 0.12, cr: 0.52 },
@@ -49,6 +54,7 @@ fn easy_params(dim: usize) -> BenchmarkParams {
         },
         512 => BenchmarkParams {
             ans: ANS { popsize: 64, sigma: 0.12, self_instead_neighbour: 0.04 },
+            ans_sort: AnsSorted { popsize: 64, sigma: 0.12, self_instead_neighbour: 0.08 },
             ansr: ANSR { popsize: 64, restart_tolerance: 1e-8, sigma: 0.12, self_instead_neighbour: 0.04 },
             ansr_dpnm: AnsrDpnm { popsize: 64, restart_tolerance: 1e-8, sigma: 0.2, self_instead_neighbour: 0.8, restart_decay_power: 2.0, neighbour_multiplier: 0.5 },
             de: DE { popsize: 64, f: 0.12, cr: 0.44 },
@@ -57,6 +63,7 @@ fn easy_params(dim: usize) -> BenchmarkParams {
         },
         1024 => BenchmarkParams {
             ans: ANS { popsize: 64, sigma: 0.16, self_instead_neighbour: 0.16 },
+            ans_sort: AnsSorted { popsize: 64, sigma: 0.16, self_instead_neighbour: 0.0 },
             ansr: ANSR { popsize: 64, restart_tolerance: 1e-8, sigma: 0.16, self_instead_neighbour: 0.16 },
             ansr_dpnm: AnsrDpnm { popsize: 64, restart_tolerance: 1e-8, sigma: 0.2, self_instead_neighbour: 0.6, restart_decay_power: 2.0, neighbour_multiplier: 0.5 },
             de: DE { popsize: 64, f: 0.12, cr: 0.32 },
@@ -72,6 +79,7 @@ fn medium_terrain_params(dim: usize) -> BenchmarkParams {
     match dim {
         64 => BenchmarkParams {
             ans: ANS { popsize: 64, sigma: 0.32, self_instead_neighbour: 0.92 },
+            ans_sort: AnsSorted { popsize: 64, sigma: 0.64, self_instead_neighbour: 0.08 },
             ansr: ANSR { popsize: 64, restart_tolerance: 1e-8, sigma: 0.32, self_instead_neighbour: 0.92 },
             ansr_dpnm: AnsrDpnm { popsize: 64, restart_tolerance: 1e-8, sigma: 0.2, self_instead_neighbour: 0.8, restart_decay_power: 2.0, neighbour_multiplier: 0.75 },
             de: DE { popsize: 64, f: 0.2, cr: 0.12 },
@@ -80,6 +88,7 @@ fn medium_terrain_params(dim: usize) -> BenchmarkParams {
         },
         128 => BenchmarkParams {
             ans: ANS { popsize: 64, sigma: 0.36, self_instead_neighbour: 0.92 },
+            ans_sort: AnsSorted { popsize: 64, sigma: 0.64, self_instead_neighbour: 0.08 },
             ansr: ANSR { popsize: 64, restart_tolerance: 1e-8, sigma: 0.28, self_instead_neighbour: 0.92 },
             ansr_dpnm: AnsrDpnm { popsize: 64, restart_tolerance: 1e-8, sigma: 0.2, self_instead_neighbour: 0.8, restart_decay_power: 2.0, neighbour_multiplier: 0.5 },
             de: DE { popsize: 64, f: 0.32, cr: 0.08 },
@@ -88,6 +97,7 @@ fn medium_terrain_params(dim: usize) -> BenchmarkParams {
         },
         256 => BenchmarkParams {
             ans: ANS { popsize: 64, sigma: 0.32, self_instead_neighbour: 0.96 },
+            ans_sort: AnsSorted { popsize: 64, sigma: 0.64, self_instead_neighbour: 0.08 },
             ansr: ANSR { popsize: 64, restart_tolerance: 1e-8, sigma: 0.36, self_instead_neighbour: 0.96 },
             ansr_dpnm: AnsrDpnm { popsize: 64, restart_tolerance: 1e-8, sigma: 0.2, self_instead_neighbour: 0.0, restart_decay_power: 2.0, neighbour_multiplier: 0.5 },
             de: DE { popsize: 64, f: 0.24, cr: 0.04 },
@@ -102,6 +112,7 @@ fn hard_discrete_params(dim: usize) -> BenchmarkParams {
     match dim {
         16 => BenchmarkParams {
             ans: ANS { popsize: 64, sigma: 0.2, self_instead_neighbour: 0.8 },
+            ans_sort: AnsSorted { popsize: 64, sigma: 0.2, self_instead_neighbour: 0.8 },
             ansr: ANSR { popsize: 64, restart_tolerance: 1e-8, sigma: 0.04, self_instead_neighbour: 0.0 },
             ansr_dpnm: AnsrDpnm { popsize: 64, restart_tolerance: 1e-8, sigma: 0.2, self_instead_neighbour: 0.0, restart_decay_power: 2.0, neighbour_multiplier: 0.5 },
             de: DE { popsize: 64, f: 0.56, cr: 0.4 },
@@ -110,6 +121,7 @@ fn hard_discrete_params(dim: usize) -> BenchmarkParams {
         },
         32 => BenchmarkParams {
             ans: ANS { popsize: 64, sigma: 0.04, self_instead_neighbour: 0.0 },
+            ans_sort: AnsSorted { popsize: 64, sigma: 0.04, self_instead_neighbour: 0.0 },
             ansr: ANSR { popsize: 64, restart_tolerance: 1e-8, sigma: 0.04, self_instead_neighbour: 0.0 },
             ansr_dpnm: AnsrDpnm { popsize: 64, restart_tolerance: 1e-8, sigma: 0.2, self_instead_neighbour: 0.0, restart_decay_power: 2.0, neighbour_multiplier: 0.5 },
             de: DE { popsize: 64, f: 0.52, cr: 0.4 },
@@ -118,6 +130,7 @@ fn hard_discrete_params(dim: usize) -> BenchmarkParams {
         },
         64 => BenchmarkParams {
             ans: ANS { popsize: 64, sigma: 0.04, self_instead_neighbour: 0.0 },
+            ans_sort: AnsSorted { popsize: 64, sigma: 0.04, self_instead_neighbour: 0.0 },
             ansr: ANSR { popsize: 64, restart_tolerance: 1e-8, sigma: 0.04, self_instead_neighbour: 0.0 },
             ansr_dpnm: AnsrDpnm { popsize: 64, restart_tolerance: 1e-8, sigma: 0.2, self_instead_neighbour: 0.0, restart_decay_power: 2.0, neighbour_multiplier: 0.5 },
             de: DE { popsize: 64, f: 0.64, cr: 0.16 },
@@ -132,6 +145,7 @@ fn medium_periodic_params(dim: usize) -> BenchmarkParams {
     match dim {
         16 => BenchmarkParams {
             ans: ANS { popsize: 64, sigma: 0.04, self_instead_neighbour: 0.24 },
+            ans_sort: AnsSorted { popsize: 64, sigma: 0.04, self_instead_neighbour: 0.16 },
             ansr: ANSR { popsize: 64, restart_tolerance: 1e-8, sigma: 0.04, self_instead_neighbour: 0.0 },
             ansr_dpnm: AnsrDpnm { popsize: 64, restart_tolerance: 1e-8, sigma: 0.2, self_instead_neighbour: 0.2, restart_decay_power: 2.0, neighbour_multiplier: 0.5 },
             de: DE { popsize: 64, f: 0.04, cr: 0.0 },
@@ -140,6 +154,7 @@ fn medium_periodic_params(dim: usize) -> BenchmarkParams {
         },
         32 => BenchmarkParams {
             ans: ANS { popsize: 64, sigma: 0.04, self_instead_neighbour: 0.4 },
+            ans_sort: AnsSorted { popsize: 64, sigma: 0.12, self_instead_neighbour: 0.32 },
             ansr: ANSR { popsize: 64, restart_tolerance: 1e-8, sigma: 0.04, self_instead_neighbour: 0.04 },
             ansr_dpnm: AnsrDpnm { popsize: 64, restart_tolerance: 1e-8, sigma: 0.2, self_instead_neighbour: 0.6, restart_decay_power: 2.0, neighbour_multiplier: 0.5 },
             de: DE { popsize: 64, f: 0.04, cr: 0.0 },
@@ -148,6 +163,7 @@ fn medium_periodic_params(dim: usize) -> BenchmarkParams {
         },
         64 => BenchmarkParams {
             ans: ANS { popsize: 64, sigma: 0.04, self_instead_neighbour: 0.56 },
+            ans_sort: AnsSorted { popsize: 64, sigma: 0.04, self_instead_neighbour: 0.0 },
             ansr: ANSR { popsize: 64, restart_tolerance: 1e-8, sigma: 0.04, self_instead_neighbour: 0.0 },
             ansr_dpnm: AnsrDpnm { popsize: 64, restart_tolerance: 1e-8, sigma: 0.2, self_instead_neighbour: 0.0, restart_decay_power: 2.0, neighbour_multiplier: 0.5 },
             de: DE { popsize: 64, f: 0.04, cr: 0.0 },
